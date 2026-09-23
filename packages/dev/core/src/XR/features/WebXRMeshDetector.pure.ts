@@ -103,6 +103,9 @@ let MeshIdProvider = 0;
  */
 export class WebXRMeshDetector extends WebXRAbstractFeature {
     private _detectedMeshes: Map<XRMesh, IWebXRVertexData> = new Map<XRMesh, IWebXRVertexData>();
+    // Scratch set for meshes to remove each XR frame. _onXRFrame is synchronous and the set
+    // never escapes, so clearing and reusing it is safe.
+    private _toRemoveScratch: Set<XRMesh> = new Set<XRMesh>();
 
     /**
      * The module's name
@@ -184,7 +187,8 @@ export class WebXRMeshDetector extends WebXRAbstractFeature {
             // babylon native XR and webxr support
             const detectedMeshes = frame.detectedMeshes || frame.worldInformation?.detectedMeshes;
             if (detectedMeshes) {
-                const toRemove = new Set<XRMesh>();
+                const toRemove = this._toRemoveScratch;
+                toRemove.clear();
                 this._detectedMeshes.forEach((vertexData, xrMesh) => {
                     if (!detectedMeshes.has(xrMesh)) {
                         toRemove.add(xrMesh);

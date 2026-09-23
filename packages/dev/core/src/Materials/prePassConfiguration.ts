@@ -88,7 +88,9 @@ export class PrePassConfiguration {
                 effect.setMatrix("previousWorld", this.previousWorldMatrices[mesh.uniqueId]);
                 effect.setMatrix("previousViewProjection", this.previousViewProjection);
 
-                this.previousWorldMatrices[mesh.uniqueId] = world.clone();
+                // setMatrix copies the values synchronously (mirrors the copyFrom pattern in
+                // materialHelper.geometryrendering.ts), so the stored matrix can be reused in place.
+                this.previousWorldMatrices[mesh.uniqueId].copyFrom(world);
             }
         }
     }

@@ -237,6 +237,11 @@ export class Effect implements IDisposable {
     public _uniformBuffersNames: { [key: string]: number } = {};
     /** @internal */
     public _samplerList: string[];
+    // Channels already expanded to indexed samplers by setTextureArray, with the sampler list length
+    // at the time. The list only grows here (see setTextureArray) or is replaced in the constructor,
+    // so a length mismatch means external mutation and the cache is dropped and re-verified.
+    private _expandedTextureArrayChannels = new Set<string>();
+    private _expandedTextureArrayListLength = -1;
     /** @internal */
     public _multiTarget: boolean = false;
 
@@ -1003,19 +1008,27 @@ export class Effect implements IDisposable {
      */
     public setTextureArray(channel: string, textures: ThinTexture[]): void {
         const exName = channel + "Ex";
-        if (this._samplerList.indexOf(exName + "0") === -1) {
-            const initialPos = this._samplerList.indexOf(channel);
-            for (let index = 1; index < textures.length; index++) {
-                const currentExName = exName + (index - 1).toString();
-                this._samplerList.splice(initialPos + index, 0, currentExName);
-            }
+        if (this._expandedTextureArrayListLength !== this._samplerList.length) {
+            this._expandedTextureArrayChannels.clear();
+            this._expandedTextureArrayListLength = this._samplerList.length;
+        }
+        if (!this._expandedTextureArrayChannels.has(channel)) {
+            if (this._samplerList.indexOf(exName + "0") === -1) {
+                const initialPos = this._samplerList.indexOf(channel);
+                for (let index = 1; index < textures.length; index++) {
+                    const currentExName = exName + (index - 1).toString();
+                    this._samplerList.splice(initialPos + index, 0, currentExName);
+                }
 
-            // Reset every channels
-            let channelIndex = 0;
-            for (const key of this._samplerList) {
-                this._samplers[key] = channelIndex;
-                channelIndex += 1;
+                // Reset every channels
+                let channelIndex = 0;
+                for (const key of this._samplerList) {
+                    this._samplers[key] = channelIndex;
+                    channelIndex += 1;
+                }
             }
+            this._expandedTextureArrayChannels.add(channel);
+            this._expandedTextureArrayListLength = this._samplerList.length;
         }
 
         this._engine.setTextureArray(this._samplers[channel], this._uniforms[channel], textures, channel);

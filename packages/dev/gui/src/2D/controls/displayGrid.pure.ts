@@ -180,24 +180,25 @@ export class DisplayGrid extends Control {
                 context.strokeStyle = this._minorLineColor;
                 context.lineWidth = this._minorLineTickness;
 
+                // All vertical lines are parallel and never overlap each other, so a
+                // single path + stroke paints each pixel exactly once, as before.
+                context.beginPath();
                 for (let x = -cellCountX / 2 + 1; x < cellCountX / 2; x++) {
                     const cellX = left + x * this.cellWidth;
 
-                    context.beginPath();
                     context.moveTo(cellX, this._currentMeasure.top);
                     context.lineTo(cellX, this._currentMeasure.top + this._currentMeasure.height);
-
-                    context.stroke();
                 }
+                context.stroke();
 
+                context.beginPath();
                 for (let y = -cellCountY / 2 + 1; y < cellCountY / 2; y++) {
                     const cellY = top + y * this.cellHeight;
 
-                    context.beginPath();
                     context.moveTo(this._currentMeasure.left, cellY);
                     context.lineTo(this._currentMeasure.left + this._currentMeasure.width, cellY);
-                    context.stroke();
                 }
+                context.stroke();
             }
 
             // Major lines
@@ -205,14 +206,14 @@ export class DisplayGrid extends Control {
                 context.strokeStyle = this._majorLineColor;
                 context.lineWidth = this._majorLineTickness;
 
+                context.beginPath();
                 for (let x = -cellCountX / 2 + this._majorLineFrequency; x < cellCountX / 2; x += this._majorLineFrequency) {
                     const cellX = left + x * this.cellWidth;
 
-                    context.beginPath();
                     context.moveTo(cellX, this._currentMeasure.top);
                     context.lineTo(cellX, this._currentMeasure.top + this._currentMeasure.height);
-                    context.stroke();
                 }
+                context.stroke();
 
                 for (let y = -cellCountY / 2 + this._majorLineFrequency; y < cellCountY / 2; y += this._majorLineFrequency) {
                     const cellY = top + y * this.cellHeight;

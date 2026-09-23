@@ -634,25 +634,30 @@ export class AdvancedDynamicTexture extends DynamicTexture {
         }
 
         for (const control1 of controlsForGroup) {
-            let velocity = Vector2.Zero();
-            const center = new Vector2(control1.centerX, control1.centerY);
+            const velocity = TmpVectors.Vector2[0];
+            velocity.copyFromFloats(0, 0);
+            const centerX = control1.centerX;
+            const centerY = control1.centerY;
 
             for (const control2 of controlsForGroup) {
                 if (control1 !== control2 && AdvancedDynamicTexture._Overlaps(control1, control2)) {
                     // if the two controls overlaps get a direction vector from one control's center to another control's center
-                    const diff = center.subtract(new Vector2(control2.centerX, control2.centerY));
+                    const diff = TmpVectors.Vector2[1];
+                    diff.copyFromFloats(centerX - control2.centerX, centerY - control2.centerY);
                     const diffLength = diff.length();
 
                     if (diffLength > 0) {
                         // calculate the velocity
-                        velocity = velocity.add(diff.normalize().scale(repelFactor / diffLength));
+                        diff.normalize();
+                        diff.scaleAndAddToRef(repelFactor / diffLength, velocity);
                     }
                 }
             }
 
             if (velocity.length() > 0) {
                 // move the control along the direction vector away from the overlapping control
-                velocity = velocity.normalize().scale(deltaStep * (control1.overlapDeltaMultiplier ?? 1));
+                velocity.normalize();
+                velocity.scaleInPlace(deltaStep * (control1.overlapDeltaMultiplier ?? 1));
                 control1.linkOffsetXInPixels += velocity.x;
                 control1.linkOffsetYInPixels += velocity.y;
             }
@@ -822,6 +827,7 @@ export class AdvancedDynamicTexture extends DynamicTexture {
                 return;
             }
             const globalViewport = this._getGlobalViewport();
+            const transformMatrix = scene.getTransformMatrix();
             for (const control of this._linkedControls) {
                 if (!control.isVisible) {
                     continue;
@@ -834,7 +840,7 @@ export class AdvancedDynamicTexture extends DynamicTexture {
                     continue;
                 }
                 const position = mesh.getBoundingInfo ? mesh.getBoundingInfo().boundingSphere.center : (Vector3.ZeroReadOnly as Vector3);
-                const projectedPosition = Vector3.Project(position, mesh.getWorldMatrix(), scene.getTransformMatrix(), globalViewport);
+                const projectedPosition = Vector3.ProjectToRef(position, mesh.getWorldMatrix(), transformMatrix, globalViewport, this._projectedPositionScratch);
                 if (projectedPosition.z < 0 || projectedPosition.z > 1) {
                     control.notRenderable = true;
                     continue;
@@ -858,6 +864,14 @@ export class AdvancedDynamicTexture extends DynamicTexture {
     }
 
     private _clearMeasure = new Measure(0, 0, 0, 0);
+
+    // Reused for the root layout measure in _render. _layout only copies from it,
+    // never retains it, so reuse is value-identical.
+    private _renderMeasure = new Measure(0, 0, 0, 0);
+
+    // Scratch for per-frame linked-control projection. Only read synchronously by
+    // _moveToProjectedPosition, never retained, so reuse is value-identical.
+    private _projectedPositionScratch = new Vector3();
 
     private _render(skipRender?: boolean): void {
         const textureSize = this.getSize();
@@ -883,7 +897,8 @@ export class AdvancedDynamicTexture extends DynamicTexture {
 
         // Layout
         this.onBeginLayoutObservable.notifyObservers(this);
-        const measure = new Measure(0, 0, renderWidth, renderHeight);
+        const measure = this._renderMeasure;
+        measure.copyFromFloats(0, 0, renderWidth, renderHeight);
         this._numLayoutCalls = 0;
         this._rootContainer._layout(measure, context);
         this.onEndLayoutObservable.notifyObservers(this);

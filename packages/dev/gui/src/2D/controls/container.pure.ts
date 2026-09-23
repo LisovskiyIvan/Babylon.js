@@ -418,7 +418,11 @@ export class Container extends Control {
                     );
                     this._intermediateTexture.hasAlpha = true;
                 } else {
-                    this._intermediateTexture.scaleTo(this._currentMeasure.width, this._currentMeasure.height);
+                    // scaleTo unconditionally reallocates the texture, so only resize when the size actually changed
+                    const textureSize = this._intermediateTexture.getSize();
+                    if (textureSize.width !== this._currentMeasure.width || textureSize.height !== this._currentMeasure.height) {
+                        this._intermediateTexture.scaleTo(this._currentMeasure.width, this._currentMeasure.height);
+                    }
                 }
             }
         }

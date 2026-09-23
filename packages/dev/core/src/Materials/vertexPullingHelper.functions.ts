@@ -81,15 +81,28 @@ export function PrepareVertexPullingUniforms(geometry: Geometry): Nullable<Map<s
     return metadata;
 }
 
+// Cache of precomputed uniform names per attribute ("vp_<attribute>_info"), avoiding template-string allocs per bind.
+const _UniformNameCache = new Map<string, string>();
+
+function _GetUniformName(attribute: string): string {
+    let uniformName = _UniformNameCache.get(attribute);
+    if (uniformName === undefined) {
+        uniformName = `vp_${attribute}_info`;
+        _UniformNameCache.set(attribute, uniformName);
+    }
+    return uniformName;
+}
+
+function _BindAttribute(this: Effect, data: IVertexPullingMetadata, attribute: string): void {
+    // `this` is the Effect being bound to (see BindVertexPullingUniforms).
+    this.setFloat4(_GetUniformName(attribute), data.offset, data.stride, data.type, data.normalized ? 1 : 0);
+}
+
 /**
  * Bind vertex pulling uniforms to the effect
  * @param effect The effect to bind the uniforms to
  * @param metadata The vertex pulling metadata
  */
 export function BindVertexPullingUniforms(effect: Effect, metadata: Map<string, IVertexPullingMetadata>): void {
-    metadata.forEach((data, attribute) => {
-        const uniformName = `vp_${attribute}_info`;
-        // Pack into vec4: (offset, stride, type, normalized)
-        effect.setFloat4(uniformName, data.offset, data.stride, data.type, data.normalized ? 1 : 0);
-    });
+    metadata.forEach(_BindAttribute, effect);
 }

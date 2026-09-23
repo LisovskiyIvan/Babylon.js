@@ -75,6 +75,9 @@ import { RegisterClass } from "../../Misc/typeStore";
 
 const onCreatedEffectParameters = { effect: null as unknown as Effect, subMesh: null as unknown as Nullable<SubMesh> };
 
+// Shared white color for BindIBLParameters (used read-only downstream, never mutated).
+const _WhiteColor = /*#__PURE__*/ new Color3(1, 1, 1);
+
 function _GetComponentCount(value: PropertyType): number {
     if (typeof value === "number") {
         return 1;
@@ -2611,7 +2614,7 @@ export class OpenPBRMaterial extends OpenPBRMaterialBase {
                         }
                     }
 
-                    BindIBLParameters(scene, defines, ubo, Color3.White(), radianceTexture, this.realTimeFiltering, true, true, true, true, true);
+                    BindIBLParameters(scene, defines, ubo, _WhiteColor, radianceTexture, this.realTimeFiltering, true, true, true, true, true);
                 }
 
                 // Point size

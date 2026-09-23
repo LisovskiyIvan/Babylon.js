@@ -154,40 +154,46 @@ export class MaterialPluginManager {
 
     protected _handlePluginEventIsReadyForSubMesh(eventData: MaterialPluginIsReadyForSubMesh): void {
         let isReady = true;
-        for (const plugin of this._activePlugins) {
-            isReady = isReady && plugin.isReadyForSubMesh(eventData.defines, this._scene, this._engine, eventData.subMesh);
+        const plugins = this._activePlugins;
+        for (let i = 0; i < plugins.length; i++) {
+            isReady = isReady && plugins[i].isReadyForSubMesh(eventData.defines, this._scene, this._engine, eventData.subMesh);
         }
         eventData.isReadyForSubMesh = isReady;
     }
 
     protected _handlePluginEventPrepareDefinesBeforeAttributes(eventData: MaterialPluginPrepareDefines): void {
-        for (const plugin of this._activePlugins) {
-            plugin.prepareDefinesBeforeAttributes(eventData.defines, this._scene, eventData.mesh);
+        const plugins = this._activePlugins;
+        for (let i = 0; i < plugins.length; i++) {
+            plugins[i].prepareDefinesBeforeAttributes(eventData.defines, this._scene, eventData.mesh);
         }
     }
 
     protected _handlePluginEventPrepareDefines(eventData: MaterialPluginPrepareDefines): void {
-        for (const plugin of this._activePlugins) {
-            plugin.prepareDefines(eventData.defines, this._scene, eventData.mesh);
+        const plugins = this._activePlugins;
+        for (let i = 0; i < plugins.length; i++) {
+            plugins[i].prepareDefines(eventData.defines, this._scene, eventData.mesh);
         }
     }
 
     protected _handlePluginEventHardBindForSubMesh(eventData: MaterialPluginHardBindForSubMesh): void {
-        for (const plugin of this._activePluginsForExtraEvents) {
-            plugin.hardBindForSubMesh(this._material._uniformBuffer, this._scene, this._engine, eventData.subMesh);
+        const plugins = this._activePluginsForExtraEvents;
+        for (let i = 0; i < plugins.length; i++) {
+            plugins[i].hardBindForSubMesh(this._material._uniformBuffer, this._scene, this._engine, eventData.subMesh);
         }
     }
 
     protected _handlePluginEventBindForSubMesh(eventData: MaterialPluginBindForSubMesh): void {
-        for (const plugin of this._activePlugins) {
-            plugin.bindForSubMesh(this._material._uniformBuffer, this._scene, this._engine, eventData.subMesh);
+        const plugins = this._activePlugins;
+        for (let i = 0; i < plugins.length; i++) {
+            plugins[i].bindForSubMesh(this._material._uniformBuffer, this._scene, this._engine, eventData.subMesh);
         }
     }
 
     protected _handlePluginEventHasRenderTargetTextures(eventData: MaterialPluginHasRenderTargetTextures): void {
         let hasRenderTargetTextures = false;
-        for (const plugin of this._activePluginsForExtraEvents) {
-            hasRenderTargetTextures = plugin.hasRenderTargetTextures();
+        const plugins = this._activePluginsForExtraEvents;
+        for (let i = 0; i < plugins.length; i++) {
+            hasRenderTargetTextures = plugins[i].hasRenderTargetTextures();
             if (hasRenderTargetTextures) {
                 break;
             }
@@ -196,8 +202,9 @@ export class MaterialPluginManager {
     }
 
     protected _handlePluginEventFillRenderTargetTextures(eventData: MaterialPluginFillRenderTargetTextures): void {
-        for (const plugin of this._activePluginsForExtraEvents) {
-            plugin.fillRenderTargetTextures(eventData.renderTargets);
+        const plugins = this._activePluginsForExtraEvents;
+        for (let i = 0; i < plugins.length; i++) {
+            plugins[i].fillRenderTargetTextures(eventData.renderTargets);
         }
     }
 
@@ -215,16 +222,18 @@ export class MaterialPluginManager {
         switch (id) {
             case MaterialPluginEvent.GetActiveTextures: {
                 const eventData = info as MaterialPluginGetActiveTextures;
-                for (const plugin of this._activePlugins) {
-                    plugin.getActiveTextures(eventData.activeTextures);
+                const plugins = this._activePlugins;
+                for (let i = 0; i < plugins.length; i++) {
+                    plugins[i].getActiveTextures(eventData.activeTextures);
                 }
                 break;
             }
 
             case MaterialPluginEvent.GetAnimatables: {
                 const eventData = info as MaterialPluginGetAnimatables;
-                for (const plugin of this._activePlugins) {
-                    plugin.getAnimatables(eventData.animatables);
+                const plugins = this._activePlugins;
+                for (let i = 0; i < plugins.length; i++) {
+                    plugins[i].getAnimatables(eventData.animatables);
                 }
                 break;
             }
@@ -232,8 +241,9 @@ export class MaterialPluginManager {
             case MaterialPluginEvent.HasTexture: {
                 const eventData = info as MaterialPluginHasTexture;
                 let hasTexture = false;
-                for (const plugin of this._activePlugins) {
-                    hasTexture = plugin.hasTexture(eventData.texture);
+                const plugins = this._activePlugins;
+                for (let i = 0; i < plugins.length; i++) {
+                    hasTexture = plugins[i].hasTexture(eventData.texture);
                     if (hasTexture) {
                         break;
                     }
@@ -258,9 +268,10 @@ export class MaterialPluginManager {
 
             case MaterialPluginEvent.PrepareEffect: {
                 const eventData = info as MaterialPluginPrepareEffect;
-                for (const plugin of this._activePlugins) {
-                    eventData.fallbackRank = plugin.addFallbacks(eventData.defines, eventData.fallbacks, eventData.fallbackRank);
-                    plugin.getAttributes(eventData.attributes, this._scene, eventData.mesh);
+                const plugins = this._activePlugins;
+                for (let i = 0; i < plugins.length; i++) {
+                    eventData.fallbackRank = plugins[i].addFallbacks(eventData.defines, eventData.fallbacks, eventData.fallbackRank);
+                    plugins[i].getAttributes(eventData.attributes, this._scene, eventData.mesh);
                 }
                 if (this._uniformList.length > 0) {
                     eventData.uniforms.push(...this._uniformList);
@@ -372,7 +383,9 @@ export class MaterialPluginManager {
             let processorOptions: Nullable<_IProcessingOptions> = null;
             for (let pointName in points) {
                 let injectedCode = "";
-                for (const plugin of this._activePlugins) {
+                const plugins = this._activePlugins;
+                for (let i = 0; i < plugins.length; i++) {
+                    const plugin = plugins[i];
                     const shaderLanguage = this._material.shaderLanguage;
                     let customCode = plugin.getCustomCode(shaderType, shaderLanguage)?.[pointName];
                     if (!customCode) {

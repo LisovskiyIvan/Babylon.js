@@ -12,6 +12,19 @@ import { GetClass } from "../Misc/typeStore";
 import { type ISortableLight, LightConstants } from "./lightConstants";
 import { type Camera } from "../Cameras/camera";
 import { SerializationHelper } from "../Misc/decorators.serialization";
+
+// Cached string forms of light indices ("0", "1", ...), grown on demand.
+// _bindLight runs per light per mesh per frame, so this avoids a toString() alloc each time.
+const _LightIndexStrings: string[] = [];
+
+function _LightIndexToString(lightIndex: number): string {
+    let result = _LightIndexStrings[lightIndex];
+    if (result === undefined) {
+        result = lightIndex.toString();
+        _LightIndexStrings[lightIndex] = result;
+    }
+    return result;
+}
 /**
  * Base class of all the lights in Babylon. It groups all the generic information about lights.
  * Lights are used, as you would expect, to affect how meshes are seen, in terms of both illumination and colour.
@@ -432,7 +445,7 @@ export abstract class Light extends Node implements ISortableLight {
      * @param receiveShadows Defines if the effect (mesh) we bind the light for receives shadows
      */
     public _bindLight(lightIndex: number, scene: Scene, effect: Effect, useSpecular: boolean, receiveShadows = true): void {
-        const iAsString = lightIndex.toString();
+        const iAsString = _LightIndexToString(lightIndex);
         let needUpdate = false;
 
         this._uniformBuffer.bindToEffect(effect, "Light" + iAsString);

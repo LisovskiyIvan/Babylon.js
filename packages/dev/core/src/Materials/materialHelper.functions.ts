@@ -407,6 +407,8 @@ export function PrepareDefinesForMergedUV(texture: BaseTexture, defines: any, ke
     }
 }
 
+const _TextureMatrixNameCache = new Map<string, string>();
+
 /**
  * Binds a texture matrix value to its corresponding uniform
  * @param texture The texture to bind the matrix for
@@ -416,7 +418,13 @@ export function PrepareDefinesForMergedUV(texture: BaseTexture, defines: any, ke
 export function BindTextureMatrix(texture: BaseTexture, uniformBuffer: UniformBuffer, key: string): void {
     const matrix = texture.getTextureMatrix();
 
-    uniformBuffer.updateMatrix(key + "Matrix", matrix);
+    // Channel keys are a small fixed set ("diffuse", "specular", ...), so cache the concatenated uniform name.
+    let matrixName = _TextureMatrixNameCache.get(key);
+    if (matrixName === undefined) {
+        matrixName = key + "Matrix";
+        _TextureMatrixNameCache.set(key, matrixName);
+    }
+    uniformBuffer.updateMatrix(matrixName, matrix);
 }
 
 /**

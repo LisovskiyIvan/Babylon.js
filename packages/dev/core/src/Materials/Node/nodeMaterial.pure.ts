@@ -1927,21 +1927,25 @@ export class NodeMaterial extends NodeMaterialBase {
 
         if (mustRebind) {
             // Bindable blocks
-            for (const block of sharedData.bindableBlocks) {
-                block.bind(effect, this, mesh, subMesh);
+            const bindableBlocks = sharedData.bindableBlocks;
+            for (let i = 0; i < bindableBlocks.length; i++) {
+                bindableBlocks[i].bind(effect, this, mesh, subMesh);
             }
 
-            for (const block of sharedData.forcedBindableBlocks) {
-                block.bind(effect, this, mesh, subMesh);
+            const forcedBindableBlocks = sharedData.forcedBindableBlocks;
+            for (let i = 0; i < forcedBindableBlocks.length; i++) {
+                forcedBindableBlocks[i].bind(effect, this, mesh, subMesh);
             }
 
             // Connection points
-            for (const inputBlock of sharedData.inputBlocks) {
-                inputBlock._transmit(effect, scene, this);
+            const inputBlocks = sharedData.inputBlocks;
+            for (let i = 0; i < inputBlocks.length; i++) {
+                inputBlocks[i]._transmit(effect, scene, this);
             }
         } else if (!this.isFrozen) {
-            for (const block of sharedData.forcedBindableBlocks) {
-                block.bind(effect, this, mesh, subMesh);
+            const forcedBindableBlocks = sharedData.forcedBindableBlocks;
+            for (let i = 0; i < forcedBindableBlocks.length; i++) {
+                forcedBindableBlocks[i].bind(effect, this, mesh, subMesh);
             }
         }
 
@@ -1956,7 +1960,13 @@ export class NodeMaterial extends NodeMaterialBase {
         const activeTextures = super.getActiveTextures();
 
         if (this._sharedData) {
-            activeTextures.push(...this._sharedData.textureBlocks.filter((tb) => tb.texture).map((tb) => tb.texture!));
+            const textureBlocks = this._sharedData.textureBlocks;
+            for (let i = 0; i < textureBlocks.length; i++) {
+                const texture = textureBlocks[i].texture;
+                if (texture) {
+                    activeTextures.push(texture);
+                }
+            }
         }
 
         return activeTextures;

@@ -70,6 +70,9 @@ import { RegisterClass } from "../Misc/typeStore";
 
 const onCreatedEffectParameters = { effect: null as unknown as Effect, subMesh: null as unknown as Nullable<SubMesh> };
 
+// Shared white color for BindIBLParameters (used read-only downstream, never mutated).
+const _WhiteColor = /*#__PURE__*/ new Color3(1, 1, 1);
+
 class StandardMaterialDefinesBase extends PrepassDefinesMixin(UVDefinesMixin(MaterialDefines)) {}
 
 /** @internal */
@@ -1486,7 +1489,7 @@ export class StandardMaterial extends StandardMaterialBase {
                         ubo.updateFloat("alphaCutOff", this.alphaCutOff);
                     }
 
-                    BindIBLParameters(scene, defines, ubo, Color3.White(), this._reflectionTexture, false, false, true, false, false, false, this.roughness);
+                    BindIBLParameters(scene, defines, ubo, _WhiteColor, this._reflectionTexture, false, false, true, false, false, false, this.roughness);
                     if (!this._reflectionTexture || !StandardMaterial.ReflectionTextureEnabled) {
                         ubo.updateFloat2("vReflectionInfos", 0.0, this.roughness);
                     }

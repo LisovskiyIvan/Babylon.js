@@ -31,18 +31,27 @@ export class STLExport {
     ): any {
         //Binary support adapted from https://gist.github.com/paulkaplan/6d5f0ab2c7e8fdc68a61
 
-        const getFaceData = function (indices: any, vertices: any, i: number) {
-            const id = [indices[i] * 3, indices[i + 1] * 3, indices[i + 2] * 3];
-            const v = [
-                new Vector3(vertices[id[0]], vertices[id[0] + 2], vertices[id[0] + 1]),
-                new Vector3(vertices[id[1]], vertices[id[1] + 2], vertices[id[1] + 1]),
-                new Vector3(vertices[id[2]], vertices[id[2] + 2], vertices[id[2] + 1]),
-            ];
-            const p1p2 = v[0].subtract(v[1]);
-            const p3p2 = v[2].subtract(v[1]);
-            const n = Vector3.Cross(p3p2, p1p2).normalize();
+        // Per-face scratch vectors: getFaceData's result is consumed synchronously within the same loop iteration, so reuse is safe.
+        const scratchV0 = new Vector3();
+        const scratchV1 = new Vector3();
+        const scratchV2 = new Vector3();
+        const scratchEdge1 = new Vector3();
+        const scratchEdge2 = new Vector3();
+        const scratchNormal = new Vector3();
+        const scratchFaceData = { v: [scratchV0, scratchV1, scratchV2], n: scratchNormal };
 
-            return { v, n };
+        const getFaceData = function (indices: any, vertices: any, i: number) {
+            const id0 = indices[i] * 3;
+            const id1 = indices[i + 1] * 3;
+            const id2 = indices[i + 2] * 3;
+            scratchV0.copyFromFloats(vertices[id0], vertices[id0 + 2], vertices[id0 + 1]);
+            scratchV1.copyFromFloats(vertices[id1], vertices[id1 + 2], vertices[id1 + 1]);
+            scratchV2.copyFromFloats(vertices[id2], vertices[id2 + 2], vertices[id2 + 1]);
+            scratchV0.subtractToRef(scratchV1, scratchEdge1);
+            scratchV2.subtractToRef(scratchV1, scratchEdge2);
+            Vector3.CrossToRef(scratchEdge2, scratchEdge1, scratchNormal).normalize();
+
+            return scratchFaceData;
         };
 
         const writeVector = function (dataview: any, offset: number, vector: Vector3, isLittleEndian: boolean) {
@@ -83,6 +92,9 @@ export class STLExport {
 
         let data: DataView<ArrayBuffer> | string = "";
 
+        // ASCII parts are collected in order and joined once at the end, producing byte-identical output to += concatenation.
+        const asciiParts: string[] = [];
+
         let faceCount = 0;
         let offset = 0;
 
@@ -102,14 +114,14 @@ export class STLExport {
             offset += 4;
         } else {
             if (!exportIndividualMeshes) {
-                data = "solid stlmesh\r\n";
+                asciiParts.push("solid stlmesh\r\n");
             }
         }
 
         for (let i = 0; i < meshes.length; i++) {
             const mesh = meshes[i];
             if (!binary && exportIndividualMeshes) {
-                data += "solid " + mesh.name + "\r\n";
+                asciiParts.push("solid " + mesh.name + "\r\n");
             }
             if (!doNotBakeTransform && mesh instanceof Mesh) {
                 mesh.bakeCurrentTransformIntoVertices();
@@ -127,22 +139,52 @@ export class STLExport {
                     offset = writeVector(data, offset, fd.v[2], isLittleEndian);
                     offset += 2;
                 } else {
-                    data += "\tfacet normal " + fd.n.x + " " + fd.n.y + " " + fd.n.z + "\r\n";
-                    data += "\t\touter loop\r\n";
-                    data += "\t\t\tvertex " + fd.v[0].x + " " + fd.v[0].y + " " + fd.v[0].z + "\r\n";
-                    data += "\t\t\tvertex " + fd.v[1].x + " " + fd.v[1].y + " " + fd.v[1].z + "\r\n";
-                    data += "\t\t\tvertex " + fd.v[2].x + " " + fd.v[2].y + " " + fd.v[2].z + "\r\n";
-                    data += "\t\tendloop\r\n";
-                    data += "\tendfacet\r\n";
+                    asciiParts.push(
+                        "\tfacet normal " +
+                            fd.n.x +
+                            " " +
+                            fd.n.y +
+                            " " +
+                            fd.n.z +
+                            "\r\n" +
+                            "\t\touter loop\r\n" +
+                            "\t\t\tvertex " +
+                            fd.v[0].x +
+                            " " +
+                            fd.v[0].y +
+                            " " +
+                            fd.v[0].z +
+                            "\r\n" +
+                            "\t\t\tvertex " +
+                            fd.v[1].x +
+                            " " +
+                            fd.v[1].y +
+                            " " +
+                            fd.v[1].z +
+                            "\r\n" +
+                            "\t\t\tvertex " +
+                            fd.v[2].x +
+                            " " +
+                            fd.v[2].y +
+                            " " +
+                            fd.v[2].z +
+                            "\r\n" +
+                            "\t\tendloop\r\n" +
+                            "\tendfacet\r\n"
+                    );
                 }
             }
             if (!binary && exportIndividualMeshes) {
-                data += "endsolid " + name + "\r\n";
+                asciiParts.push("endsolid " + name + "\r\n");
             }
         }
 
         if (!binary && !exportIndividualMeshes) {
-            data += "endsolid stlmesh";
+            asciiParts.push("endsolid stlmesh");
+        }
+
+        if (!binary) {
+            data = asciiParts.join("");
         }
 
         if (download) {

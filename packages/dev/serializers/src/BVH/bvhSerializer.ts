@@ -2,7 +2,7 @@ import { type Skeleton } from "core/Bones/skeleton";
 import { type Bone } from "core/Bones/bone";
 import { type IAnimationKey } from "core/Animations/animationKey";
 import { AnimationRange } from "core/Animations/animationRange";
-import { Vector3, Quaternion, Matrix } from "core/Maths/math.vector";
+import { Vector3, Quaternion, TmpVectors } from "core/Maths/math.vector";
 import { Tools } from "core/Misc/tools";
 import { Epsilon } from "core/Maths/math.constants";
 import { type Nullable } from "core/types";
@@ -116,10 +116,16 @@ export class BVHExporter {
                     if (animationNames.includes(animation.name)) {
                         if (animation.targetProperty === "position") {
                             boneData.hasPositionChannels = true;
-                            boneData.positionKeys.push(...animation.getKeys());
+                            const positionKeys = animation.getKeys();
+                            for (let keyIndex = 0; keyIndex < positionKeys.length; keyIndex++) {
+                                boneData.positionKeys.push(positionKeys[keyIndex]);
+                            }
                         } else if (animation.targetProperty === "rotationQuaternion") {
                             boneData.hasRotationChannels = true;
-                            boneData.rotationKeys.push(...animation.getKeys());
+                            const rotationKeys = animation.getKeys();
+                            for (let keyIndex = 0; keyIndex < rotationKeys.length; keyIndex++) {
+                                boneData.rotationKeys.push(rotationKeys[keyIndex]);
+                            }
                         }
                     }
                 }
@@ -208,18 +214,27 @@ export class BVHExporter {
     }
 
     private static _ExportMotionData(boneData: IBVHBoneData[], frameCount: number, startFrame: number, animationNames: string[]): string {
-        let result = "";
+        if (frameCount === 0) {
+            return "";
+        }
+
+        const rows = new Array<string>(frameCount);
+        const frameValues: number[] = [];
 
         for (let frame = 0; frame < frameCount; frame++) {
-            const frameValues: number[] = [];
+            frameValues.length = 0;
 
             // Collect values for all bones in hierarchy order
             this._CollectFrameValues(boneData, frame + startFrame, frameValues, animationNames);
 
-            result += frameValues.map((v) => v.toFixed(6)).join(" ") + "\n";
+            const parts = new Array<string>(frameValues.length);
+            for (let i = 0; i < frameValues.length; i++) {
+                parts[i] = frameValues[i].toFixed(6);
+            }
+            rows[frame] = parts.join(" ");
         }
 
-        return result;
+        return rows.join("\n") + "\n";
     }
 
     private static _CollectFrameValues(boneData: IBVHBoneData[], frameIndex: number, values: number[], animationNames: string[]): void {
@@ -255,9 +270,9 @@ export class BVHExporter {
             return Vector3.Zero();
         }
 
-        // Clamp frame index to valid range
+        // Clamp frame index to valid range. The caller only reads components, so no clone is needed.
         const clampedIndex = Math.max(0, Math.min(frameIndex, keys.length - 1));
-        return keys[clampedIndex].value.clone();
+        return keys[clampedIndex].value;
     }
 
     private static _GetRotationAtFrameIndex(keys: IAnimationKey[], frameIndex: number): Quaternion {
@@ -265,15 +280,15 @@ export class BVHExporter {
             return Quaternion.Identity();
         }
 
-        // Clamp frame index to valid range
+        // Clamp frame index to valid range. toRotationMatrix does not mutate its input, so no clone is needed.
         const clampedIndex = Math.max(0, Math.min(frameIndex, keys.length - 1));
-        return keys[clampedIndex].value.clone();
+        return keys[clampedIndex].value;
     }
 
     private static _QuaternionToEuler(quaternion: Quaternion): Vector3 {
-        // Convert quaternion to Euler angles in ZXY order for BVH
-        const matrix = new Matrix();
-        quaternion.toRotationMatrix(matrix);
+        // Convert quaternion to Euler angles in ZXY order for BVH.
+        // NOTE: the returned vector is scratch (TmpVectors) — the sole caller consumes its components synchronously.
+        const matrix = quaternion.toRotationMatrix(TmpVectors.Matrix[0]);
 
         const m = matrix.m;
         let x, y, z;
@@ -291,6 +306,6 @@ export class BVHExporter {
             z = 0;
         }
 
-        return new Vector3(Tools.ToDegrees(x), Tools.ToDegrees(y), Tools.ToDegrees(z));
+        return TmpVectors.Vector3[0].copyFromFloats(Tools.ToDegrees(x), Tools.ToDegrees(y), Tools.ToDegrees(z));
     }
 }

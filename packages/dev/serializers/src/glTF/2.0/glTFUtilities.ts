@@ -59,7 +59,12 @@ export function GetAccessorElementCount(accessorType: AccessorType): number {
 }
 
 export function FloatsNeed16BitInteger(floatArray: FloatArray): boolean {
-    return floatArray.some((value) => value >= 256);
+    for (let i = 0; i < floatArray.length; i++) {
+        if (floatArray[i] >= 256) {
+            return true;
+        }
+    }
+    return false;
 }
 
 export function IsStandardVertexAttribute(type: string): boolean {

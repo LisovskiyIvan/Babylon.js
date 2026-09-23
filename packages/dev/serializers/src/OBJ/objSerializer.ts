@@ -93,40 +93,24 @@ export class OBJExport {
                 }
             }
 
-            const blanks: string[] = ["", "", ""];
             const material = mesh.material || mesh.getScene().defaultMaterial;
 
             const sideOrientation = material._getEffectiveOrientation(mesh);
             const [offset1, offset2] = sideOrientation === Material.ClockWiseSideOrientation ? [2, 1] : [1, 2];
 
             for (let i = 0; i < trunkFaces.length; i += 3) {
-                const indices = [String(trunkFaces[i] + v), String(trunkFaces[i + offset1] + v), String(trunkFaces[i + offset2] + v)];
-                const textureIndices = [String(trunkFaces[i] + textureV), String(trunkFaces[i + offset1] + textureV), String(trunkFaces[i + offset2] + textureV)];
+                const p0 = trunkFaces[i] + v;
+                const p1 = trunkFaces[i + offset1] + v;
+                const p2 = trunkFaces[i + offset2] + v;
+                // Empty components (when uv/normals are absent) render as "" exactly like the previous blanks array.
+                const u0 = trunkUV != null ? trunkFaces[i] + textureV : "";
+                const u1 = trunkUV != null ? trunkFaces[i + offset1] + textureV : "";
+                const u2 = trunkUV != null ? trunkFaces[i + offset2] + textureV : "";
+                const n0 = trunkNormals != null ? p0 : "";
+                const n1 = trunkNormals != null ? p1 : "";
+                const n2 = trunkNormals != null ? p2 : "";
 
-                const facePositions = indices;
-                const faceUVs = trunkUV != null ? textureIndices : blanks;
-                const faceNormals = trunkNormals != null ? indices : blanks;
-
-                output.push(
-                    "f " +
-                        facePositions[0] +
-                        "/" +
-                        faceUVs[0] +
-                        "/" +
-                        faceNormals[0] +
-                        " " +
-                        facePositions[1] +
-                        "/" +
-                        faceUVs[1] +
-                        "/" +
-                        faceNormals[1] +
-                        " " +
-                        facePositions[2] +
-                        "/" +
-                        faceUVs[2] +
-                        "/" +
-                        faceNormals[2]
-                );
+                output.push(`f ${p0}/${u0}/${n0} ${p1}/${u1}/${n1} ${p2}/${u2}/${n2}`);
             }
             //back de previous matrix, to not change the original mesh in the scene
             if (globalposition && inverseTransform) {

@@ -185,17 +185,17 @@ function Flat(vertexData: VertexData): VertexData {
             const uv12 = [(uv1[0] + uv2[0]) / 2, (uv1[1] + uv2[1]) / 2];
             const uv20 = [(uv2[0] + uv0[0]) / 2, (uv2[1] + uv0[1]) / 2];
 
-            newUVs.push(...uv0, ...uv01, ...uv20);
-            newUVs.push(...uv1, ...uv12, ...uv01);
-            newUVs.push(...uv2, ...uv20, ...uv12);
-            newUVs.push(...uv01, ...uv12, ...uv20);
+            newUVs.push(uv0[0], uv0[1], uv01[0], uv01[1], uv20[0], uv20[1]);
+            newUVs.push(uv1[0], uv1[1], uv12[0], uv12[1], uv01[0], uv01[1]);
+            newUVs.push(uv2[0], uv2[1], uv20[0], uv20[1], uv12[0], uv12[1]);
+            newUVs.push(uv01[0], uv01[1], uv12[0], uv12[1], uv20[0], uv20[1]);
         }
     }
 
     const newVertexCount = newPositions.length / 3;
-    const newIndices: number[] = [];
+    const newIndices: number[] = new Array<number>(newVertexCount);
     for (let i = 0; i < newVertexCount; i++) {
-        newIndices.push(i);
+        newIndices[i] = i;
     }
 
     const newVertexData = new VertexData();
@@ -229,7 +229,7 @@ function Smooth(vertexData: VertexData, options: ISubdivideOptions): VertexData 
     const hashToIndex: { [hash: string]: number[] } = {};
     const existingNeighbors: { [hash: string]: { [neighborHash: string]: number[] } } = {};
     const flatOpposites: { [hash: string]: number[] } = {};
-    const existingEdges: { [hash: string]: Set<string> } = {};
+    const existingEdges: { [hash: string]: string[] } = {};
 
     function addNeighbor(posHash: string, neighborHash: string, index: number): void {
         if (!existingNeighbors[posHash]) {
@@ -248,9 +248,9 @@ function Smooth(vertexData: VertexData, options: ISubdivideOptions): VertexData 
     }
     function addEdgePoint(posHash: string, edgeHash: string): void {
         if (!existingEdges[posHash]) {
-            existingEdges[posHash] = new Set<string>();
+            existingEdges[posHash] = [];
         }
-        existingEdges[posHash].add(edgeHash);
+        existingEdges[posHash].push(edgeHash);
     }
 
     const temp = new Vector3();
@@ -333,8 +333,8 @@ function Smooth(vertexData: VertexData, options: ISubdivideOptions): VertexData 
                     const startWeight = 1.0 - beta * k;
                     ReadVector(_vertex[v], flattenedAttribute, i + v, 3);
                     _vertex[v].scaleInPlace(startWeight);
-                    for (const positionIndex of positionsArr) {
-                        ReadVector(_average, flattenedAttribute, positionIndex, 3);
+                    for (let p = 0; p < positionsArr.length; p++) {
+                        ReadVector(_average, flattenedAttribute, positionsArr[p], 3);
                         _average.scaleInPlace(beta);
                         _vertex[v].addInPlace(_average);
                     }
@@ -347,13 +347,14 @@ function Smooth(vertexData: VertexData, options: ISubdivideOptions): VertexData 
                     const opposites = flatOpposites[positionHash];
                     if (neighbors) {
                         if (options.preserveEdges) {
-                            const edgeSet = existingEdges[positionHash];
+                            const edgeList = existingEdges[positionHash];
                             let hasPair = true;
-                            edgeSet.forEach((edgeHash) => {
+                            for (let e = 0; e < edgeList.length; e++) {
+                                const edgeHash = edgeList[e];
                                 if (flatOpposites[edgeHash] && flatOpposites[edgeHash].length % 2 !== 0) {
                                     hasPair = false;
                                 }
-                            });
+                            }
                             if (!hasPair) {
                                 // If edges aren't paired, skip adjustment.
                                 continue;
@@ -366,11 +367,11 @@ function Smooth(vertexData: VertexData, options: ISubdivideOptions): VertexData 
                         const weight = Scalar.Lerp(heavy, beta, options.weight!);
                         const startWeight = 1.0 - weight * k;
                         _vertex[v].scaleInPlace(startWeight);
-                        for (const neighborHash in neighbors) {
-                            const neighborIndices = neighbors[neighborHash];
+                        for (let n = 0; n < neighborKeys.length; n++) {
+                            const neighborIndices = neighbors[neighborKeys[n]];
                             _average.set(0, 0, 0);
-                            for (const neighborIndex of neighborIndices) {
-                                ReadVector(_temp, existingAttribute, neighborIndex, itemSize);
+                            for (let m = 0; m < neighborIndices.length; m++) {
+                                ReadVector(_temp, existingAttribute, neighborIndices[m], itemSize);
                                 _average.addInPlace(_temp);
                             }
                             _average.scaleInPlace(1 / neighborIndices.length);
@@ -382,8 +383,8 @@ function Smooth(vertexData: VertexData, options: ISubdivideOptions): VertexData 
                         const beta = 0.125; // 1/8
                         const startWeight = 1.0 - beta * k;
                         _vertex[v].scaleInPlace(startWeight);
-                        for (const oppositeIndex of opposites) {
-                            ReadVector(_average, existingAttribute, oppositeIndex, itemSize);
+                        for (let o = 0; o < opposites.length; o++) {
+                            ReadVector(_average, existingAttribute, opposites[o], itemSize);
                             _average.scaleInPlace(beta);
                             _vertex[v].addInPlace(_average);
                         }
@@ -414,9 +415,10 @@ function Smooth(vertexData: VertexData, options: ISubdivideOptions): VertexData 
 
     // Rebuild indices sequentially.
     const newPositions = smoothData.positions!;
-    const newIndices: number[] = [];
-    for (let i = 0; i < newPositions.length / 3; i++) {
-        newIndices.push(i);
+    const newIndexCount = newPositions.length / 3;
+    const newIndices: number[] = new Array<number>(newIndexCount);
+    for (let i = 0; i < newIndexCount; i++) {
+        newIndices[i] = i;
     }
     smoothData.indices = newIndices;
     return smoothData;

@@ -109,7 +109,8 @@ function ApplySkeleton(
         for (inf = 0; inf < 4; inf++) {
             weight = matricesWeightsData[matWeightIdx + inf];
             if (weight > 0) {
-                Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, Math.floor(matricesIndicesData[matWeightIdx + inf] * 16), weight, tempMatrix);
+                // Bone indices are non-negative integers well within int32 range, so | 0 matches Math.floor here.
+                Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, (matricesIndicesData[matWeightIdx + inf] * 16) | 0, weight, tempMatrix);
                 finalMatrix.addToSelf(tempMatrix);
             }
         }
@@ -117,7 +118,7 @@ function ApplySkeleton(
             for (inf = 0; inf < 4; inf++) {
                 weight = matricesWeightsExtraData[matWeightIdx + inf];
                 if (weight > 0) {
-                    Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, Math.floor(matricesIndicesExtraData[matWeightIdx + inf] * 16), weight, tempMatrix);
+                    Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, (matricesIndicesExtraData[matWeightIdx + inf] * 16) | 0, weight, tempMatrix);
                     finalMatrix.addToSelf(tempMatrix);
                 }
             }
@@ -210,7 +211,7 @@ function ApplyBakedVertexAnimation(
         for (inf = 0; inf < 4 && inf < numBoneInfluencers; inf++) {
             weight = matricesWeightsData[matWeightIdx + inf];
             if (weight > 0) {
-                ReadBakedVertexAnimationMatrixToRef(textureData, textureFrameOffset + Math.floor(matricesIndicesData[matWeightIdx + inf]) * 16, tempMatrix);
+                ReadBakedVertexAnimationMatrixToRef(textureData, textureFrameOffset + ((matricesIndicesData[matWeightIdx + inf] | 0) * 16), tempMatrix);
                 tempMatrix.scaleAndAddToRef(weight, finalMatrix);
             }
         }
@@ -218,7 +219,7 @@ function ApplyBakedVertexAnimation(
             for (inf = 0; inf < 4 && inf + 4 < numBoneInfluencers; inf++) {
                 weight = matricesWeightsExtraData[matWeightIdx + inf];
                 if (weight > 0) {
-                    ReadBakedVertexAnimationMatrixToRef(textureData, textureFrameOffset + Math.floor(matricesIndicesExtraData[matWeightIdx + inf]) * 16, tempMatrix);
+                    ReadBakedVertexAnimationMatrixToRef(textureData, textureFrameOffset + ((matricesIndicesExtraData[matWeightIdx + inf] | 0) * 16), tempMatrix);
                     tempMatrix.scaleAndAddToRef(weight, finalMatrix);
                 }
             }

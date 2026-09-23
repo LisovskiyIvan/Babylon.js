@@ -115,7 +115,7 @@ export function GetTransformedPosition(mesh: AbstractMesh, index: number, res: V
             for (let i = 0; i < matricesWeightsData.length; i++) {
                 const weight = matricesWeightsData[i];
                 if (weight > 0) {
-                    Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, Math.floor(matricesIndicesData[i] * 16), weight, tempMatrix);
+                    Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, (matricesIndicesData[i] * 16) | 0, weight, tempMatrix);
                     finalMatrix.addToSelf(tempMatrix);
                 }
             }
@@ -123,7 +123,7 @@ export function GetTransformedPosition(mesh: AbstractMesh, index: number, res: V
                 for (let i = 0; i < matricesWeightsExtraData.length; i++) {
                     const weight = matricesWeightsExtraData[i];
                     if (weight > 0) {
-                        Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, Math.floor(matricesIndicesExtraData[i] * 16), weight, tempMatrix);
+                        Matrix.FromFloat32ArrayToRefScaled(skeletonMatrices, (matricesIndicesExtraData[i] * 16) | 0, weight, tempMatrix);
                         finalMatrix.addToSelf(tempMatrix);
                     }
                 }

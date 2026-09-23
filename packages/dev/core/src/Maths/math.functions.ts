@@ -120,7 +120,7 @@ export function FixFlippedFaces(positions: FloatArray, indices: IndicesArray): v
     const tmpVectorAvgNormal = new Vector3();
 
     // Clean indices
-    for (let index = 0; index < indices.length; index += 3) {
+    for (let index = 0, indicesLength = indices.length; index < indicesLength; index += 3) {
         const a = indices[index];
         const b = indices[index + 1];
         const c = indices[index + 2];

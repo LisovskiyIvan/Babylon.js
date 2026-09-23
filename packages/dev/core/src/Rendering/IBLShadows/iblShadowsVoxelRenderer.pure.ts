@@ -746,7 +746,7 @@ export class _IblShadowsVoxelRenderer {
                 const rttReady = this._renderTargets[i].isReadyForRendering();
                 allReady &&= rttReady;
             }
-            for (const gsVoxelMat of Array.from(this._gsVoxelMaterialCache.values())) {
+            for (const gsVoxelMat of this._gsVoxelMaterialCache.values()) {
                 allReady &&= gsVoxelMat.isReady();
             }
             if (!allReady) {

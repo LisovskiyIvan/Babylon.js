@@ -241,6 +241,8 @@ export class FrameGraphGeometryRendererTask extends FrameGraphObjectRendererTask
     }
 
     private _clearAttachmentsLayout: Map<GeometryRenderingTextureClearType, number[]>;
+    // Cached entries of _clearAttachmentsLayout, refreshed whenever the layout is rebuilt, to iterate without a Map.forEach closure per frame
+    private _clearAttachmentsEntries: [GeometryRenderingTextureClearType, number[]][] = [];
     private _allAttachmentsLayout: number[];
     private _colorAttachmentsLayout: number[];
 
@@ -567,9 +569,11 @@ export class FrameGraphGeometryRendererTask extends FrameGraphObjectRendererTask
 
         context.pushDebugGroup(`Clear attachments`);
 
-        this._clearAttachmentsLayout.forEach((layout, clearType) => {
+        for (let index = 0; index < this._clearAttachmentsEntries.length; index++) {
+            const clearType = this._clearAttachmentsEntries[index][0];
+            const layout = this._clearAttachmentsEntries[index][1];
             context.clearColorAttachments(ClearColors[clearType], layout);
-        });
+        }
 
         context.restoreDefaultFramebuffer();
         context.popDebugGroup();
@@ -616,6 +620,7 @@ export class FrameGraphGeometryRendererTask extends FrameGraphObjectRendererTask
         clearAttachmentsLayout.forEach((layout, clearType) => {
             this._clearAttachmentsLayout.set(clearType, this._engine.buildTextureLayout(layout));
         });
+        this._clearAttachmentsEntries = Array.from(this._clearAttachmentsLayout.entries());
 
         this._allAttachmentsLayout = this._engine.buildTextureLayout(allAttachmentsLayout);
         this._colorAttachmentsLayout = this._engine.buildTextureLayout(allAttachmentsLayout.map((_, index) => targetTextureCount > 0 && index === 0));

@@ -127,6 +127,15 @@ export interface IDisposable {
 const TempVect1 = /*#__PURE__*/ new Vector4();
 const TempVect2 = /*#__PURE__*/ new Vector4();
 
+// Scratch target for _MatchIntersectionExitParameter below. Set immediately before
+// hasSpecificTrigger and consumed synchronously, so no closure is allocated per action per frame.
+let _IntersectionExitCheckOtherMesh: Nullable<AbstractMesh> = null;
+
+function _MatchIntersectionExitParameter(parameter: any): boolean {
+    const parameterMesh = parameter.mesh ? parameter.mesh : parameter;
+    return _IntersectionExitCheckOtherMesh === parameterMesh;
+}
+
 /** Interface defining initialization parameters for Scene class */
 // eslint-disable-next-line @typescript-eslint/naming-convention
 export interface SceneOptions {
@@ -1777,9 +1786,12 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
      */
     public dispatchAllSubMeshesOfActiveMeshes: boolean = false;
     private _activeMeshes = new SmartArray<AbstractMesh>(256);
-    private _processedMaterials = new SmartArray<Material>(256);
+    // NoDuplicate flavor so membership is tracked via per-material flags instead of an O(n) indexOf per submesh
+    private _processedMaterials = new SmartArrayNoDuplicate<Material>(256);
     private _renderTargets = new SmartArrayNoDuplicate<RenderTargetTexture>(256);
     private _materialsRenderTargets = new SmartArrayNoDuplicate<RenderTargetTexture>(256);
+    // Scratch storage reused to save/restore the bounding box render list around render target rendering (see _saveBoundingBoxRenderList)
+    private _savedBoundingBoxRenderList = new Array<BoundingBox>();
     /** @internal */
     public _activeParticleSystems = new SmartArray<IParticleSystem>(256);
     private _activeSkeletons = new SmartArrayNoDuplicate<Skeleton>(32);
@@ -2485,18 +2497,14 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
                     for (const subMesh of mesh.subMeshes) {
                         const material = subMesh.getMaterial();
                         if (material && material.hasRenderTargetTextures && material.getRenderTargetTextures != null) {
-                            if (this._processedMaterials.indexOf(material) === -1) {
-                                this._processedMaterials.push(material);
-
+                            if (this._processedMaterials.pushNoDuplicate(material)) {
                                 this._materialsRenderTargets.concatWithNoDuplicate(material.getRenderTargetTextures());
                             }
                         }
                     }
                 } else {
                     if (mat.hasRenderTargetTextures && mat.getRenderTargetTextures != null) {
-                        if (this._processedMaterials.indexOf(mat) === -1) {
-                            this._processedMaterials.push(mat);
-
+                        if (this._processedMaterials.pushNoDuplicate(mat)) {
                             this._materialsRenderTargets.concatWithNoDuplicate(mat.getRenderTargetTextures());
                         }
                     }
@@ -4492,9 +4500,7 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
             if (material !== null && material !== undefined) {
                 // Render targets
                 if (material.hasRenderTargetTextures && material.getRenderTargetTextures != null) {
-                    if (this._processedMaterials.indexOf(material) === -1) {
-                        this._processedMaterials.push(material);
-
+                    if (this._processedMaterials.pushNoDuplicate(material)) {
                         this._materialsRenderTargets.concatWithNoDuplicate(material.getRenderTargetTextures());
                     }
                 }
@@ -4773,6 +4779,24 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
 
         // We need to ensure we are not in the rendering loop
         this.onBeforeRenderObservable.addOnce(() => container.dispose());
+    }
+
+    private _saveBoundingBoxRenderList(boundingBoxRenderer: BoundingBoxRenderer): void {
+        const renderList = boundingBoxRenderer.renderList;
+        const savedList = this._savedBoundingBoxRenderList;
+        for (let index = 0; index < renderList.length; index++) {
+            savedList[index] = renderList.data[index];
+        }
+        savedList.length = renderList.length;
+    }
+
+    private _restoreBoundingBoxRenderList(boundingBoxRenderer: BoundingBoxRenderer): void {
+        const renderList = boundingBoxRenderer.renderList;
+        const savedList = this._savedBoundingBoxRenderList;
+        for (let index = 0; index < savedList.length; index++) {
+            renderList.data[index] = savedList[index];
+        }
+        renderList.length = savedList.length;
     }
 
     private _evaluateActiveMeshes(): void {
@@ -5112,7 +5136,7 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
         if (this.renderTargetsEnabled) {
             this._intermediateRendering = true;
 
-            let currentBoundingBoxMeshList: Array<BoundingBox> | undefined;
+            let boundingBoxMeshListSaved = false;
 
             if (this._renderTargets.length > 0) {
                 Tools.StartPerformanceCounter("Render targets", this._renderTargets.length > 0);
@@ -5125,19 +5149,18 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
                     if (renderTarget._shouldRender()) {
                         this._renderId++;
                         const hasSpecialRenderTargetCamera = renderTarget.activeCamera && renderTarget.activeCamera !== this.activeCamera;
-                        if (boundingBoxRenderer && !currentBoundingBoxMeshList) {
+                        if (boundingBoxRenderer && !boundingBoxMeshListSaved) {
                             // Saves the current bounding box mesh list (potentially built by the call to _evaluateActiveMeshes above), which will be reset/updated when processing this target
-                            currentBoundingBoxMeshList = boundingBoxRenderer.renderList.length > 0 ? boundingBoxRenderer.renderList.data.slice() : [];
-                            currentBoundingBoxMeshList.length = boundingBoxRenderer.renderList.length;
+                            this._saveBoundingBoxRenderList(boundingBoxRenderer);
+                            boundingBoxMeshListSaved = true;
                         }
                         renderTarget.render(<boolean>hasSpecialRenderTargetCamera, this.dumpNextRenderTargets);
                         needRebind = true;
                     }
                 }
 
-                if (boundingBoxRenderer && currentBoundingBoxMeshList) {
-                    boundingBoxRenderer.renderList.data = currentBoundingBoxMeshList;
-                    boundingBoxRenderer.renderList.length = currentBoundingBoxMeshList.length;
+                if (boundingBoxRenderer && boundingBoxMeshListSaved) {
+                    this._restoreBoundingBoxRenderList(boundingBoxRenderer);
                 }
 
                 Tools.EndPerformanceCounter("Render targets", this._renderTargets.length > 0);
@@ -5149,10 +5172,10 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
                 // The cast to "any" is to avoid an error in ES6 in case you don't import boundingBoxRenderer
                 const boundingBoxRenderer = (this as any).getBoundingBoxRenderer?.() as Nullable<BoundingBoxRenderer>;
 
-                if (boundingBoxRenderer && !currentBoundingBoxMeshList) {
+                if (boundingBoxRenderer && !boundingBoxMeshListSaved) {
                     // Saves the current bounding box mesh list (potentially built by the call to _evaluateActiveMeshes above), which can be reset/updated during the loop below
-                    currentBoundingBoxMeshList = boundingBoxRenderer.renderList.length > 0 ? boundingBoxRenderer.renderList.data.slice() : [];
-                    currentBoundingBoxMeshList.length = boundingBoxRenderer.renderList.length;
+                    this._saveBoundingBoxRenderList(boundingBoxRenderer);
+                    boundingBoxMeshListSaved = true;
                 }
 
                 for (const step of this._cameraDrawRenderTargetStage) {
@@ -5160,9 +5183,8 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
                     needRebind = step.action(this.activeCamera) || needRebind;
                 }
 
-                if (boundingBoxRenderer && currentBoundingBoxMeshList) {
-                    boundingBoxRenderer.renderList.data = currentBoundingBoxMeshList;
-                    boundingBoxRenderer.renderList.length = currentBoundingBoxMeshList.length;
+                if (boundingBoxRenderer && boundingBoxMeshListSaved) {
+                    this._restoreBoundingBoxRenderList(boundingBoxRenderer);
                 }
             }
 
@@ -5280,13 +5302,14 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
                         }
 
                         //if this is an exit trigger, or no exit trigger exists, remove the id from the intersection in progress array.
-                        if (
-                            !sourceMesh.actionManager.hasSpecificTrigger(Constants.ACTION_OnIntersectionExitTrigger, (parameter) => {
-                                const parameterMesh = parameter.mesh ? parameter.mesh : parameter;
-                                return otherMesh === parameterMesh;
-                            }) ||
-                            action.trigger === Constants.ACTION_OnIntersectionExitTrigger
-                        ) {
+                        // Uses the shared _MatchIntersectionExitParameter predicate to avoid allocating a closure per action per frame.
+                        _IntersectionExitCheckOtherMesh = otherMesh;
+                        const hasExitTrigger = sourceMesh.actionManager.hasSpecificTrigger(
+                            Constants.ACTION_OnIntersectionExitTrigger,
+                            _MatchIntersectionExitParameter
+                        );
+                        _IntersectionExitCheckOtherMesh = null;
+                        if (!hasExitTrigger || action.trigger === Constants.ACTION_OnIntersectionExitTrigger) {
                             sourceMesh._intersectionsInProgress.splice(currentIntersectionInProgress, 1);
                         }
                     }
@@ -6315,7 +6338,7 @@ export class Scene implements IAnimatable, IClipPlanesHolder, IAssetContainer {
 
         const listByTags = [];
 
-        for (const i in list) {
+        for (let i = 0; i < list.length; i++) {
             const item = list[i];
             if (Tags && Tags.MatchesQuery(item, tagsQuery) && (!filter || filter(item))) {
                 listByTags.push(item);

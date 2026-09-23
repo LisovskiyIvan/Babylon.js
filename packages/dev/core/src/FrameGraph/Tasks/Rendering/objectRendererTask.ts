@@ -12,6 +12,7 @@ import {
     type FrameGraphShadowGeneratorTask,
     type FrameGraphRenderPass,
     type AbstractEngine,
+    type BoundingBox,
     type BoundingBoxRenderer,
     type ShadowLight,
     type SmartArray,
@@ -358,6 +359,8 @@ export class FrameGraphObjectRendererTask extends FrameGraphTaskMultiRenderTarge
     protected _onAfterRenderObservable: Nullable<Observer<number>> = null;
     protected _externalObjectRenderer = false;
     protected _rtForOrderIndependentTransparency: FrameGraphRenderTarget;
+    // Scratch storage reused to save/restore the bounding box render list around rendering without a per-frame allocation
+    protected _boundingBoxMeshListScratch: BoundingBox[] = [];
 
     /**
      * Constructs a new object renderer task.
@@ -455,9 +458,15 @@ export class FrameGraphObjectRendererTask extends FrameGraphTaskMultiRenderTarge
             // The cast to "any" is to avoid an error in ES6 in case you don't import boundingBoxRenderer
             const boundingBoxRenderer = (this as any).getBoundingBoxRenderer?.() as Nullable<BoundingBoxRenderer>;
 
-            const currentBoundingBoxMeshList = boundingBoxRenderer && boundingBoxRenderer.renderList.length > 0 ? boundingBoxRenderer.renderList.data.slice() : [];
+            // Saves the current bounding box mesh list into a scratch array to avoid a per-frame allocation
+            let currentBoundingBoxMeshList: Nullable<BoundingBox[]> = null;
             if (boundingBoxRenderer) {
-                currentBoundingBoxMeshList.length = boundingBoxRenderer.renderList.length;
+                const boundingBoxRenderList = boundingBoxRenderer.renderList;
+                currentBoundingBoxMeshList = this._boundingBoxMeshListScratch;
+                for (let boundingBoxIndex = 0; boundingBoxIndex < boundingBoxRenderList.length; boundingBoxIndex++) {
+                    currentBoundingBoxMeshList[boundingBoxIndex] = boundingBoxRenderList.data[boundingBoxIndex];
+                }
+                currentBoundingBoxMeshList.length = boundingBoxRenderList.length;
             }
 
             const attachments = this._prepareRendering(context, depthEnabled);
@@ -495,9 +504,12 @@ export class FrameGraphObjectRendererTask extends FrameGraphTaskMultiRenderTarge
 
             this._scene._depthPeelingRenderer = currentOITRenderer;
 
-            if (boundingBoxRenderer) {
-                boundingBoxRenderer.renderList.data = currentBoundingBoxMeshList;
-                boundingBoxRenderer.renderList.length = currentBoundingBoxMeshList.length;
+            if (boundingBoxRenderer && currentBoundingBoxMeshList) {
+                const boundingBoxRenderList = boundingBoxRenderer.renderList;
+                for (let boundingBoxIndex = 0; boundingBoxIndex < currentBoundingBoxMeshList.length; boundingBoxIndex++) {
+                    boundingBoxRenderList.data[boundingBoxIndex] = currentBoundingBoxMeshList[boundingBoxIndex];
+                }
+                boundingBoxRenderList.length = currentBoundingBoxMeshList.length;
             }
         });
 

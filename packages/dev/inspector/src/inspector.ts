@@ -420,9 +420,7 @@ export class Inspector {
                 if (this._NewCanvasContainer) {
                     // If we move things around, let's control the resize
                     if (options.handleResize && scene) {
-                        this._OnBeforeRenderObserver = scene.onBeforeRenderObservable.add(() => {
-                            scene.getEngine().resize();
-                        });
+                        this._AddEngineResizeGuard(scene);
                     }
                 }
 
@@ -456,9 +454,7 @@ export class Inspector {
             if (this._NewCanvasContainer) {
                 // If we move things around, let's control the resize
                 if (options.handleResize && scene) {
-                    this._OnBeforeRenderObserver = scene.onBeforeRenderObservable.add(() => {
-                        scene.getEngine().resize();
-                    });
+                    this._AddEngineResizeGuard(scene);
                 }
             }
 
@@ -475,6 +471,28 @@ export class Inspector {
     public static _SetNewScene(scene: Scene) {
         this._Scene = scene;
         this._GlobalState.onNewSceneObservable.notifyObservers(scene);
+    }
+
+    private static _AddEngineResizeGuard(scene: Scene) {
+        // engine.resize() is idempotent but forces layout via getBoundingClientRect,
+        // so only call it when the canvas size or device pixel ratio actually changed.
+        // (null sentinels: the first frame always resizes, exactly like before.)
+        let lastResizeWidth: number | null = null;
+        let lastResizeHeight: number | null = null;
+        let lastResizeDevicePixelRatio: number | null = null;
+        this._OnBeforeRenderObserver = scene.onBeforeRenderObservable.add(() => {
+            const engine = scene.getEngine();
+            const canvas = engine.getRenderingCanvas();
+            const clientWidth = canvas?.clientWidth ?? 0;
+            const clientHeight = canvas?.clientHeight ?? 0;
+            const devicePixelRatio = window.devicePixelRatio || 1;
+            if (clientWidth !== lastResizeWidth || clientHeight !== lastResizeHeight || devicePixelRatio !== lastResizeDevicePixelRatio) {
+                lastResizeWidth = clientWidth;
+                lastResizeHeight = clientHeight;
+                lastResizeDevicePixelRatio = devicePixelRatio;
+                engine.resize();
+            }
+        });
     }
 
     public static _CreateCanvasContainer(parentControl: HTMLElement) {

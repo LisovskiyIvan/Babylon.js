@@ -35,6 +35,7 @@ export class PlayHeadComponent extends React.Component<IPlayHeadComponentProps, 
     private _offsetRange = 10;
     private _viewWidth = 748;
     private readonly _rangeWidthToPlayheadWidth = 40;
+    private _lastFrameText = "";
 
     private _pointerIsDown: boolean;
 
@@ -99,7 +100,13 @@ export class PlayHeadComponent extends React.Component<IPlayHeadComponentProps, 
         }
 
         this._playHead.current.style.left = this._frameToPixel(frame) + "px";
-        this._playHeadCircle.current.innerHTML = frame.toFixed(0);
+        // innerHTML writes trigger a DOM re-parse every frame even when paused;
+        // the displayed text only changes when the rounded frame changes.
+        const frameText = frame.toFixed(0);
+        if (frameText !== this._lastFrameText) {
+            this._lastFrameText = frameText;
+            this._playHeadCircle.current.innerHTML = frameText;
+        }
 
         this.props.context.activeFrame = frame;
         this.props.context.onPlayheadMoved.notifyObservers(frame);

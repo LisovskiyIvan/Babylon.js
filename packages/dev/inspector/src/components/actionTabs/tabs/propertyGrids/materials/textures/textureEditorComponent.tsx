@@ -212,16 +212,16 @@ export class TextureEditorComponent extends React.Component<ITextureEditorCompon
     }
 
     addTools(tools: IToolData[]) {
-        let newTools: ITool[] = [];
+        // Single push loop: identical result to the previous per-item concat (O(n) instead of O(n²)).
+        const newTools: ITool[] = [];
         for (const toolData of tools) {
             const tool: ITool = {
                 ...toolData,
                 instance: new toolData.type(() => this.getToolParameters()),
             };
-            newTools = newTools.concat(tool);
+            newTools.push(tool);
         }
-        newTools = this.state.tools.concat(newTools);
-        this.setState({ tools: newTools });
+        this.setState({ tools: this.state.tools.concat(newTools) });
     }
 
     getToolParameters(): IToolParameters {

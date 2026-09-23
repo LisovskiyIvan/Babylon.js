@@ -6,7 +6,18 @@ import { getMaterialTextures, type Material, type SceneContext, type Texture2D }
  * @returns The referenced materials in mesh order.
  */
 export function GetSceneMaterials(scene: SceneContext): readonly Material[] {
-    return [...new Set(scene.meshes.map((mesh) => mesh.material))];
+    // Single pass with first-occurrence order: identical result to the previous
+    // [...new Set(scene.meshes.map((mesh) => mesh.material))], without the intermediate arrays.
+    const materials: Material[] = [];
+    const seen = new Set<Material>();
+    for (const mesh of scene.meshes) {
+        const material = mesh.material;
+        if (!seen.has(material)) {
+            seen.add(material);
+            materials.push(material);
+        }
+    }
+    return materials;
 }
 
 /**
@@ -15,5 +26,17 @@ export function GetSceneMaterials(scene: SceneContext): readonly Material[] {
  * @returns The referenced textures in material order.
  */
 export function GetSceneTextures(scene: SceneContext): readonly Texture2D[] {
-    return [...new Set(GetSceneMaterials(scene).flatMap((material) => getMaterialTextures(material)))];
+    // Single pass with first-occurrence order: identical result to the previous
+    // [...new Set(materials.flatMap(...))], without the intermediate arrays.
+    const textures: Texture2D[] = [];
+    const seen = new Set<Texture2D>();
+    for (const material of GetSceneMaterials(scene)) {
+        for (const texture of getMaterialTextures(material)) {
+            if (!seen.has(texture)) {
+                seen.add(texture);
+                textures.push(texture);
+            }
+        }
+    }
+    return textures;
 }

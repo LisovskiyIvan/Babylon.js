@@ -29,6 +29,7 @@ import { CreatePlane } from "core/Meshes/Builders/planeBuilder";
 import { Tools } from "core/Misc/tools";
 import { Scene } from "core/scene";
 import { ApplyChannelsToTextureDataAsync } from "../../misc/textureTools";
+import { EngineResizeGuard } from "../../misc/resizeGuard";
 import { canvasShader } from "./canvasShader";
 
 export type CanvasManagerTool = {
@@ -57,6 +58,7 @@ export class TextureCanvasManager {
     private _isPanning = false;
     private _mouseX = 0;
     private _mouseY = 0;
+    private readonly _resizeGuard = new EngineResizeGuard();
 
     private readonly _uiCanvas: HTMLCanvasElement;
 
@@ -262,9 +264,13 @@ export class TextureCanvasManager {
         });
 
         this._engine.runRenderLoop(() => {
-            this._engine.resize();
+            if (this._resizeGuard.shouldResize(this._uiCanvas.clientWidth, this._uiCanvas.clientHeight, window.devicePixelRatio || 1)) {
+                this._engine.resize();
+            }
             this._scene.render();
-            this._planeMaterial.setInt("time", new Date().getTime());
+            // Date.now(): identical epoch-millis value to new Date().getTime(), without the per-frame allocation.
+            // (performance.now() would change the absolute phase of the selection-border animation in the shader, so it is not used.)
+            this._planeMaterial.setInt("time", Date.now());
         });
 
         this._scale = 1.5 / Math.max(this._size.width, this._size.height);

@@ -78,10 +78,10 @@ export class AnimationGroupGridComponent extends React.Component<IAnimationGroup
         const targetedAnimations = animationGroup.targetedAnimations;
         if (targetedAnimations.length > 0) {
             const runtimeAnimation = targetedAnimations[0].animation.runtimeAnimations.find((rA) => rA.target === targetedAnimations[0].target);
-            if (runtimeAnimation) {
-                this.setState({ currentFrame: runtimeAnimation.currentFrame });
-            } else {
-                this.setState({ currentFrame: 0 });
+            // Gate on change: same displayed frame means no React reconciliation needed.
+            const newFrame = runtimeAnimation ? runtimeAnimation.currentFrame : 0;
+            if (newFrame !== this.state.currentFrame) {
+                this.setState({ currentFrame: newFrame });
             }
         }
     }

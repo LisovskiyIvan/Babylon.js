@@ -7,6 +7,7 @@ import { DefaultInspectorExtensionFeed } from "./extensibility/defaultInspectorE
 import { _StartInspectable } from "./inspectable";
 import { type InspectorOptions, type InspectorToken } from "./inspector.common";
 import { _ShowInspector } from "./inspectorHost";
+import { EngineResizeGuard } from "./misc/resizeGuard";
 import { LegacyInspectableObjectPropertiesServiceDefinition } from "./legacy/inspectableCustomPropertiesService";
 import { CliConnectionStatusServiceDefinition } from "./services/cliConnectionStatusService";
 import { GizmoServiceDefinition } from "./services/gizmoService";
@@ -88,7 +89,13 @@ export function ShowInspector(scene: Scene, options: Partial<InspectorOptions> =
         renderingCanvas: engine.getRenderingCanvas(),
         resize: () => engine.resize(),
         startAutoResize: () => {
-            const observer = scene.onBeforeRenderObservable.add(() => engine.resize());
+            const resizeGuard = new EngineResizeGuard();
+            const observer = scene.onBeforeRenderObservable.add(() => {
+                const canvas = engine.getRenderingCanvas();
+                if (resizeGuard.shouldResize(canvas?.clientWidth ?? 0, canvas?.clientHeight ?? 0, window.devicePixelRatio || 1)) {
+                    engine.resize();
+                }
+            });
             return () => observer.remove();
         },
         initialize: (resolvedOptions) => {

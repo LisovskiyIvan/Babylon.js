@@ -105,7 +105,11 @@ export class AnimationGridComponent extends React.Component<IAnimationGridCompon
             if (!this._isPlaying || !this._mainAnimatable) {
                 return;
             }
-            this.setState({ currentFrame: this._mainAnimatable.masterFrame });
+            // Gate on change: same displayed frame means no React reconciliation needed.
+            const masterFrame = this._mainAnimatable.masterFrame;
+            if (masterFrame !== this.state.currentFrame) {
+                this.setState({ currentFrame: masterFrame });
+            }
         });
     }
 

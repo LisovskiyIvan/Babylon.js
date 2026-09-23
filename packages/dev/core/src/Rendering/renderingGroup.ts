@@ -37,6 +37,11 @@ export class RenderingGroup {
     /** @internal */
     public _renderTransparent: (subMeshes: SmartArray<SubMesh>) => void;
 
+    // Reused to sort sub meshes without allocating a new array on every frame (see _renderSorted)
+    private _sortedScratch: SubMesh[] = [];
+    // Reused to test particle emitter membership without an indexOf per particle system (see _renderParticles)
+    private _activeMeshesSet = new Set<AbstractMesh>();
+
     /** @internal */
     public _empty = true;
 
@@ -219,7 +224,7 @@ export class RenderingGroup {
      * @param subMeshes The submeshes to render
      */
     private _renderOpaqueSorted(subMeshes: SmartArray<SubMesh>): void {
-        RenderingGroup._RenderSorted(subMeshes, this._opaqueSortCompareFn, this._scene.activeCamera, false, this.disableDepthPrePass);
+        this._renderSorted(subMeshes, this._opaqueSortCompareFn, this._scene.activeCamera, false, this.disableDepthPrePass);
     }
 
     /**
@@ -227,7 +232,7 @@ export class RenderingGroup {
      * @param subMeshes The submeshes to render
      */
     private _renderAlphaTestSorted(subMeshes: SmartArray<SubMesh>): void {
-        RenderingGroup._RenderSorted(subMeshes, this._alphaTestSortCompareFn, this._scene.activeCamera, false, this.disableDepthPrePass);
+        this._renderSorted(subMeshes, this._alphaTestSortCompareFn, this._scene.activeCamera, false, this.disableDepthPrePass);
     }
 
     /**
@@ -235,7 +240,7 @@ export class RenderingGroup {
      * @param subMeshes The submeshes to render
      */
     private _renderTransparentSorted(subMeshes: SmartArray<SubMesh>): void {
-        RenderingGroup._RenderSorted(subMeshes, this._transparentSortCompareFn, this._scene.activeCamera, true, this.disableDepthPrePass);
+        this._renderSorted(subMeshes, this._transparentSortCompareFn, this._scene.activeCamera, true, this.disableDepthPrePass);
     }
 
     /**
@@ -246,7 +251,7 @@ export class RenderingGroup {
      * @param transparent Specifies to activate blending if true
      * @param disableDepthPrePass Specifies to disable depth pre-pass if true (default: false)
      */
-    private static _RenderSorted(
+    private _renderSorted(
         subMeshes: SmartArray<SubMesh>,
         sortCompareFn: Nullable<(a: SubMesh, b: SubMesh) => number>,
         camera: Nullable<Camera>,
@@ -265,7 +270,19 @@ export class RenderingGroup {
             }
         }
 
-        const sortedArray = subMeshes.length === subMeshes.data.length ? subMeshes.data : subMeshes.data.slice(0, subMeshes.length);
+        let sortedArray: Array<SubMesh>;
+        if (subMeshes.length === subMeshes.data.length) {
+            // The whole backing array is in use, so it can be sorted in place
+            sortedArray = subMeshes.data;
+        } else {
+            // Copy the used range into a persistent scratch array to avoid allocating a new array every frame
+            sortedArray = this._sortedScratch;
+            const count = subMeshes.length;
+            for (let index = 0; index < count; index++) {
+                sortedArray[index] = subMeshes.data[index];
+            }
+            sortedArray.length = count;
+        }
 
         if (sortCompareFn) {
             sortedArray.sort(sortCompareFn);
@@ -473,6 +490,15 @@ export class RenderingGroup {
         // Particles
         const activeCamera = this._scene.activeCamera;
         this._scene.onBeforeParticlesRenderingObservable.notifyObservers(this._scene);
+        // Builds a membership set once per frame to avoid an O(n) indexOf per particle system
+        let activeMeshesSet: Nullable<Set<AbstractMesh>> = null;
+        if (activeMeshes) {
+            activeMeshesSet = this._activeMeshesSet;
+            activeMeshesSet.clear();
+            for (let meshIndex = 0; meshIndex < activeMeshes.length; meshIndex++) {
+                activeMeshesSet.add(activeMeshes[meshIndex]);
+            }
+        }
         for (let particleIndex = 0; particleIndex < this._particleSystems.length; particleIndex++) {
             const particleSystem = this._particleSystems.data[particleIndex];
 
@@ -481,7 +507,7 @@ export class RenderingGroup {
             }
 
             const emitter: any = particleSystem.emitter;
-            if (!emitter.position || !activeMeshes || activeMeshes.indexOf(emitter) !== -1) {
+            if (!emitter.position || !activeMeshes || (activeMeshesSet as Set<AbstractMesh>).has(emitter)) {
                 this._scene._activeParticles.addCount(particleSystem.render(), false);
             }
         }

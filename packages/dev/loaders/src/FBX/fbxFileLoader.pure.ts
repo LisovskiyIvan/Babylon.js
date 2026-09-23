@@ -1051,11 +1051,12 @@ export class FBXFileLoader implements ISceneLoaderPluginAsync, ISceneLoaderPlugi
         }
         const geometricMatrix = FBXFileLoader._computeFBXGeometricMatrix(model.geometricTranslation, model.geometricRotation, model.geometricScaling);
         if (!geometricMatrix.equals(Matrix.Identity())) {
+            const scratch = new Vector3();
             for (let i = 0; i < positions.length; i += 3) {
-                const v = Vector3.TransformCoordinates(new Vector3(positions[i], positions[i + 1], positions[i + 2]), geometricMatrix);
-                positions[i] = v.x;
-                positions[i + 1] = v.y;
-                positions[i + 2] = v.z;
+                Vector3.TransformCoordinatesFromFloatsToRef(positions[i], positions[i + 1], positions[i + 2], geometricMatrix, scratch);
+                positions[i] = scratch.x;
+                positions[i + 1] = scratch.y;
+                positions[i + 2] = scratch.z;
             }
         }
         const vertexData = new VertexData();
@@ -1091,11 +1092,12 @@ export class FBXFileLoader implements ISceneLoaderPluginAsync, ISceneLoaderPlugi
         const hasGeometricNormalTransform = !geometricNormalMatrix.equals(Matrix.Identity());
 
         if (hasGeometricPositionTransform) {
+            const scratch = new Vector3();
             for (let i = 0; i < positions.length; i += 3) {
-                const v = Vector3.TransformCoordinates(new Vector3(positions[i], positions[i + 1], positions[i + 2]), geometricPositionMatrix);
-                positions[i] = v.x;
-                positions[i + 1] = v.y;
-                positions[i + 2] = v.z;
+                Vector3.TransformCoordinatesFromFloatsToRef(positions[i], positions[i + 1], positions[i + 2], geometricPositionMatrix, scratch);
+                positions[i] = scratch.x;
+                positions[i + 1] = scratch.y;
+                positions[i + 2] = scratch.z;
             }
         }
 
@@ -1105,20 +1107,21 @@ export class FBXFileLoader implements ISceneLoaderPluginAsync, ISceneLoaderPlugi
         // initial pose, while TransformLink bind matrices handle skinning.
 
         vertexData.positions = positions;
-        vertexData.indices = Array.from(geomData.indices);
+        vertexData.indices = geomData.indices;
 
         let normals: Float32Array | undefined;
         if (geomData.normals) {
             normals = float64To32(geomData.normals);
             if (hasGeometricNormalTransform) {
+                const scratch = new Vector3();
                 for (let i = 0; i < normals.length; i += 3) {
-                    const n = Vector3.TransformNormal(new Vector3(normals[i], normals[i + 1], normals[i + 2]), geometricNormalMatrix);
-                    if (n.lengthSquared() > 0) {
-                        n.normalize();
+                    Vector3.TransformNormalFromFloatsToRef(normals[i], normals[i + 1], normals[i + 2], geometricNormalMatrix, scratch);
+                    if (scratch.lengthSquared() > 0) {
+                        scratch.normalize();
                     }
-                    normals[i] = n.x;
-                    normals[i + 1] = n.y;
-                    normals[i + 2] = n.z;
+                    normals[i] = scratch.x;
+                    normals[i + 1] = scratch.y;
+                    normals[i + 2] = scratch.z;
                 }
             }
             vertexData.normals = normals;
@@ -1146,14 +1149,15 @@ export class FBXFileLoader implements ISceneLoaderPluginAsync, ISceneLoaderPlugi
         if (geomData.tangents) {
             const tangents = float64To32(geomData.tangents);
             if (hasGeometricNormalTransform) {
+                const scratch = new Vector3();
                 for (let i = 0; i < tangents.length; i += 4) {
-                    const t = Vector3.TransformNormal(new Vector3(tangents[i], tangents[i + 1], tangents[i + 2]), geometricNormalMatrix);
-                    if (t.lengthSquared() > 0) {
-                        t.normalize();
+                    Vector3.TransformNormalFromFloatsToRef(tangents[i], tangents[i + 1], tangents[i + 2], geometricNormalMatrix, scratch);
+                    if (scratch.lengthSquared() > 0) {
+                        scratch.normalize();
                     }
-                    tangents[i] = t.x;
-                    tangents[i + 1] = t.y;
-                    tangents[i + 2] = t.z;
+                    tangents[i] = scratch.x;
+                    tangents[i + 1] = scratch.y;
+                    tangents[i + 2] = scratch.z;
                 }
             }
             applyTangentHandednessScale(tangents, this._getNormalMapTangentHandednessScale());

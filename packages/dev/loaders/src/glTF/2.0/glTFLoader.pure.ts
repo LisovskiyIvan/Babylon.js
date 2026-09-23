@@ -1454,10 +1454,14 @@ export class GLTFLoader implements IGLTFLoader {
             const componentSize = babylonVertexBuffer.getSize();
             if (componentSize === 3) {
                 colors = new Float32Array((data.length / 3) * 4);
-                babylonVertexBuffer.forEach(data.length, (value, index) => {
-                    const pixid = Math.floor(index / 3);
-                    const channel = index % 3;
+                let pixid = 0;
+                let channel = 0;
+                babylonVertexBuffer.forEach(data.length, (value) => {
                     colors[4 * pixid + channel] = data[3 * pixid + channel] + value;
+                    if (++channel === 3) {
+                        channel = 0;
+                        pixid++;
+                    }
                 });
                 for (let i = 0; i < data.length / 3; ++i) {
                     colors[4 * i + 3] = 1;

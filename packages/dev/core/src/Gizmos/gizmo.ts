@@ -641,9 +641,10 @@ export class Gizmo implements IGizmo {
                     if (dragging) {
                         return;
                     }
-                    gizmoAxisCache.forEach((cache) => {
+                    const pickedMesh = pointerInfo?.pickInfo?.pickedMesh as Mesh;
+                    for (const cache of gizmoAxisCache.values()) {
                         if (cache.colliderMeshes && cache.gizmoMeshes) {
-                            const isHovered = cache.colliderMeshes?.indexOf(pointerInfo?.pickInfo?.pickedMesh as Mesh) != -1;
+                            const isHovered = cache.colliderMeshes.includes(pickedMesh);
                             const material = cache.dragBehavior.enabled ? (isHovered || cache.active ? cache.hoverMaterial : cache.material) : cache.disableMaterial;
                             for (const m of cache.gizmoMeshes) {
                                 m.material = material;
@@ -652,7 +653,7 @@ export class Gizmo implements IGizmo {
                                 }
                             }
                         }
-                    });
+                    }
                 } else if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
                     // On Mouse Down
                     // If user Clicked Gizmo

@@ -1,7 +1,7 @@
 import { Tools } from "../Misc/tools.pure";
 import { type Nullable } from "../types";
 import { type Scene } from "../scene";
-import { Matrix, Vector3 } from "../Maths/math.vector.pure";
+import { Matrix, TmpVectors, Vector3 } from "../Maths/math.vector.pure";
 import { Clamp } from "../Maths/math.scalar.functions";
 import { EngineStore } from "../Engines/engineStore";
 import { type AbstractMesh } from "../Meshes/abstractMesh";
@@ -84,6 +84,10 @@ export class LensFlareSystem {
     private _positionX: number;
     private _positionY: number;
     private _isEnabled = true;
+    // Scratch for _isVisible only: rewritten on every call before use and consumed synchronously.
+    private _isVisibleDirection = Vector3.Zero();
+    // Scratch for render only: rewritten per flare before setMatrix and consumed synchronously.
+    private _viewportMatrix = Matrix.Identity();
 
     /**
      * @internal
@@ -223,28 +227,32 @@ export class LensFlareSystem {
      * @internal
      */
     public computeEffectivePosition(globalViewport: Viewport): boolean {
-        let position = this.getEmitterPosition();
+        const emitterPosition = this.getEmitterPosition();
 
-        position = Vector3.Project(position, Matrix.Identity(), this._scene.getTransformMatrix(), globalViewport);
+        const identity = TmpVectors.Matrix[0];
+        Matrix.IdentityToRef(identity);
+        const projectedPosition = TmpVectors.Vector3[0];
+        Vector3.ProjectToRef(emitterPosition, identity, this._scene.getTransformMatrix(), globalViewport, projectedPosition);
 
-        this._positionX = position.x;
-        this._positionY = position.y;
+        this._positionX = projectedPosition.x;
+        this._positionY = projectedPosition.y;
 
-        position = Vector3.TransformCoordinates(this.getEmitterPosition(), this._scene.getViewMatrix());
+        const viewPosition = TmpVectors.Vector3[1];
+        Vector3.TransformCoordinatesToRef(this.getEmitterPosition(), this._scene.getViewMatrix(), viewPosition);
 
         if (this.viewportBorder > 0) {
             globalViewport.x -= this.viewportBorder;
             globalViewport.y -= this.viewportBorder;
             globalViewport.width += this.viewportBorder * 2;
             globalViewport.height += this.viewportBorder * 2;
-            position.x += this.viewportBorder;
-            position.y += this.viewportBorder;
+            viewPosition.x += this.viewportBorder;
+            viewPosition.y += this.viewportBorder;
             this._positionX += this.viewportBorder;
             this._positionY += this.viewportBorder;
         }
 
         const rhs = this._scene.useRightHandedSystem;
-        const okZ = (position.z > 0 && !rhs) || (position.z < 0 && rhs);
+        const okZ = (viewPosition.z > 0 && !rhs) || (viewPosition.z < 0 && rhs);
 
         if (okZ) {
             if (this._positionX > globalViewport.x && this._positionX < globalViewport.x + globalViewport.width) {
@@ -265,7 +273,8 @@ export class LensFlareSystem {
         }
 
         const emitterPosition = this.getEmitterPosition();
-        const direction = emitterPosition.subtract(this._scene.activeCamera.globalPosition);
+        const direction = this._isVisibleDirection;
+        emitterPosition.subtractToRef(this._scene.activeCamera.globalPosition, direction);
         const distance = direction.length();
         direction.normalize();
 
@@ -374,7 +383,8 @@ export class LensFlareSystem {
             const cx = 2 * ((x - globalViewport.x) / globalViewport.width) - 1.0;
             const cy = 1.0 - 2 * ((y - globalViewport.y) / globalViewport.height);
 
-            const viewportMatrix = Matrix.FromValues(cw / 2, 0, 0, 0, 0, ch / 2, 0, 0, 0, 0, 1, 0, cx, cy, 0, 1);
+            const viewportMatrix = this._viewportMatrix;
+            Matrix.FromValuesToRef(cw / 2, 0, 0, 0, 0, ch / 2, 0, 0, 0, 0, 1, 0, cx, cy, 0, 1, viewportMatrix);
 
             flare._drawWrapper.effect!.setMatrix("viewportMatrix", viewportMatrix);
 

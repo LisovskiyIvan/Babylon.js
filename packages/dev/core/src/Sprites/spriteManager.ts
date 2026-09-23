@@ -690,7 +690,9 @@ export class SpriteManager implements ISpriteManager {
             sprite.cellIndex = 0;
         }
         const num = sprite.cellIndex;
-        if (typeof num === "number" && isFinite(num) && Math.floor(num) === num) {
+        // cellIndex is a sprite-sheet cell: always a small integer when integral, so the int32
+        // truncation below is equivalent to the Math.floor check but avoids the call.
+        if (typeof num === "number" && (num | 0) === num) {
             sprite.cellRef = this._spriteMap[sprite.cellIndex];
         }
         sprite._xOffset = this._cellData[sprite.cellRef].frame.x / baseSize.width;

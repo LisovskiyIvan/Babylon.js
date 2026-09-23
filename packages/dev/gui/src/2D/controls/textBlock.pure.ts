@@ -510,7 +510,10 @@ export class TextBlock extends Control {
         switch (this._textWrapping) {
             case TextWrapping.WordWrap:
                 for (const _line of _lines) {
-                    this._linesTemp.push(...this._parseLineWordWrap(_line, refWidth, context));
+                    const parsed = this._parseLineWordWrap(_line, refWidth, context);
+                    for (let i = 0; i < parsed.length; i++) {
+                        this._linesTemp.push(parsed[i]);
+                    }
                 }
                 break;
             case TextWrapping.Ellipsis:
@@ -520,7 +523,10 @@ export class TextBlock extends Control {
                 break;
             case TextWrapping.WordWrapEllipsis:
                 for (const _line of _lines) {
-                    this._linesTemp.push(...this._parseLineWordWrapEllipsis(_line, refWidth, refHeight, context));
+                    const parsed = this._parseLineWordWrapEllipsis(_line, refWidth, refHeight, context);
+                    for (let i = 0; i < parsed.length; i++) {
+                        this._linesTemp.push(parsed[i]);
+                    }
                 }
                 break;
             case TextWrapping.HTML:
@@ -559,9 +565,9 @@ export class TextBlock extends Control {
         // get the text node
         const textNode = htmlElement.childNodes[0];
         const range = document.createRange();
+        range.setStart(textNode, 0);
         let idx = 0;
         for (const c of textContent) {
-            range.setStart(textNode, 0);
             range.setEnd(textNode, idx + 1);
             // "select" text from beginning to this position to determine the line
             const lineIndex = range.getClientRects().length - 1;
@@ -631,15 +637,26 @@ export class TextBlock extends Control {
     protected _parseLineWordWrap(line: string = "", width: number, context: ICanvasRenderingContext): object[] {
         const lines = [];
         const words = this.wordSplittingFunction ? this.wordSplittingFunction(line) : line.split(this._wordDivider);
-        let lineWidth = this._getTextMetricsWidth(context.measureText(line));
+        // Cache measured widths per call (the font is constant for the whole call, so repeated
+        // words measure identically). Local to the call, so no invalidation is needed.
+        const widthCache = new Map<string, number>();
+        const measureWidth = (text: string): number => {
+            let textWidth = widthCache.get(text);
+            if (textWidth === undefined) {
+                textWidth = this._getTextMetricsWidth(context.measureText(text));
+                widthCache.set(text, textWidth);
+            }
+            return textWidth;
+        };
+        let lineWidth = measureWidth(line);
 
         for (let n = 0; n < words.length; n++) {
             const testLine = n > 0 ? line + this._wordDivider + words[n] : words[0];
-            const testWidth = this._getTextMetricsWidth(context.measureText(testLine));
+            const testWidth = measureWidth(testLine);
             if (testWidth > width && n > 0) {
                 lines.push({ text: line, width: lineWidth });
                 line = words[n];
-                lineWidth = this._getTextMetricsWidth(context.measureText(line));
+                lineWidth = measureWidth(line);
             } else {
                 lineWidth = testWidth;
                 line = testLine;

@@ -11,6 +11,11 @@ import { type AdvancedDynamicTexture } from "../advancedDynamicTexture";
 import { type Observer } from "core/Misc/observable";
 import { serialize } from "core/Misc/decorators";
 
+/** @internal */
+// Cache for parsed "row:column" cell keys. A key string always parses to the same
+// coordinates (pure function of the string), so entries never need invalidation.
+const GridCellCoordinatesCache = /*#__PURE__*/ new Map<string, { x: number; y: number }>();
+
 /**
  * Class used to create a 2D grid container
  */
@@ -21,6 +26,11 @@ export class Grid extends Container {
     private _columnDefinitionObservers: Observer<void>[] = [];
     private _cells: { [key: string]: Container } = {};
     private _childControls = new Array<Control>();
+    // Scratch arrays reused by _getGridDefinitions (synchronous callbacks only, no reentrancy).
+    private _gridWidths = new Array<number>();
+    private _gridHeights = new Array<number>();
+    private _gridLefts = new Array<number>();
+    private _gridTops = new Array<number>();
 
     /**
      * Sets/Gets a boolean indicating that control content must be clipped
@@ -398,10 +408,14 @@ export class Grid extends Container {
     }
 
     protected _getGridDefinitions(definitionCallback: (lefts: number[], tops: number[], widths: number[], heights: number[]) => void) {
-        const widths = [];
-        const heights = [];
-        const lefts = [];
-        const tops = [];
+        const widths = this._gridWidths;
+        const heights = this._gridHeights;
+        const lefts = this._gridLefts;
+        const tops = this._gridTops;
+        widths.length = 0;
+        heights.length = 0;
+        lefts.length = 0;
+        tops.length = 0;
 
         let availableWidth = this._currentMeasure.width;
         let globalWidthPercentage = 0;
@@ -469,14 +483,18 @@ export class Grid extends Container {
     protected override _additionalProcessing(parentMeasure: Measure, context: ICanvasRenderingContext): void {
         this._getGridDefinitions((lefts: number[], tops: number[], widths: number[], heights: number[]) => {
             // Setting child sizes
-            for (const key in this._cells) {
-                if (!Object.prototype.hasOwnProperty.call(this._cells, key)) {
-                    continue;
+            const keys = Object.keys(this._cells);
+            for (let i = 0; i < keys.length; i++) {
+                const key = keys[i];
+                let coordinates = GridCellCoordinatesCache.get(key);
+                if (!coordinates) {
+                    const split = key.split(":");
+                    coordinates = { x: parseInt(split[0]), y: parseInt(split[1]) };
+                    GridCellCoordinatesCache.set(key, coordinates);
                 }
-                const split = key.split(":");
-                const x = parseInt(split[0]);
-                const y = parseInt(split[1]);
                 const cell = this._cells[key];
+                const x = coordinates.x;
+                const y = coordinates.y;
 
                 cell.leftInPixels = lefts[y];
                 cell.topInPixels = tops[x];
@@ -493,12 +511,9 @@ export class Grid extends Container {
     }
 
     public override _flagDescendantsAsMatrixDirty(): void {
-        for (const key in this._cells) {
-            if (!Object.prototype.hasOwnProperty.call(this._cells, key)) {
-                continue;
-            }
-
-            const child = this._cells[key];
+        const keys = Object.keys(this._cells);
+        for (let i = 0; i < keys.length; i++) {
+            const child = this._cells[keys[i]];
             child._markMatrixAsDirty();
         }
     }

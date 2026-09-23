@@ -1,4 +1,7 @@
 /** @internal */
+const WordRegex = /\w/;
+
+/** @internal */
 export class TextWrapper {
     private _text: string;
     private _characters: string[] | undefined;
@@ -84,7 +87,6 @@ export class TextWrapper {
     }
 
     public isWord(index: number): boolean {
-        const rWord = /\w/g;
-        return this._characters ? this._characters[index].search(rWord) !== -1 : this._text.search(rWord) !== -1;
+        return this._characters ? this._characters[index].search(WordRegex) !== -1 : this._text.search(WordRegex) !== -1;
     }
 }

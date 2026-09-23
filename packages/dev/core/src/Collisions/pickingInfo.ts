@@ -8,6 +8,33 @@ import { type Mesh } from "../Meshes/mesh";
 
 import { type Ray } from "../Culling/ray";
 
+function _TransformNormalToWorld(pickedMesh: AbstractMesh, n: Vector3, thinInstanceIndex: number): void {
+    if (thinInstanceIndex !== -1) {
+        const thinMatrixData = (pickedMesh as Mesh)._thinInstanceDataStorage.matrixData;
+        const index = thinInstanceIndex << 4;
+
+        if (thinMatrixData && thinMatrixData.length > index) {
+            const tm = TmpVectors.Matrix[0];
+            Matrix.FromArrayToRef(thinMatrixData, index, tm);
+            Vector3.TransformNormalToRef(n, tm, n);
+        }
+    }
+
+    let wm = pickedMesh.getWorldMatrix();
+
+    if (pickedMesh.nonUniformScaling) {
+        TmpVectors.Matrix[0].copyFrom(wm);
+        wm = TmpVectors.Matrix[0];
+        wm.setTranslationFromFloats(0, 0, 0);
+        wm.invert();
+        wm.transposeToRef(TmpVectors.Matrix[1]);
+
+        wm = TmpVectors.Matrix[1];
+    }
+
+    Vector3.TransformNormalToRef(n, wm, n);
+}
+
 /**
  * Information about the result of picking within a scene
  * @see https://doc.babylonjs.com/features/featuresDeepDive/mesh/interactions/picking_collisions
@@ -88,19 +115,19 @@ export class PickingInfo {
         if (useVerticesNormals) {
             const normals = <FloatArray>this.pickedMesh.getVerticesData(VertexBuffer.NormalKind);
 
-            let normal0 = indices
+            const normal0 = indices
                 ? Vector3.FromArrayToRef(normals, indices[this.faceId * 3] * 3, tmp0)
                 : tmp0.copyFromFloats(normals[this.faceId * 3 * 3], normals[this.faceId * 3 * 3 + 1], normals[this.faceId * 3 * 3 + 2]);
-            let normal1 = indices
+            const normal1 = indices
                 ? Vector3.FromArrayToRef(normals, indices[this.faceId * 3 + 1] * 3, tmp1)
                 : tmp1.copyFromFloats(normals[(this.faceId * 3 + 1) * 3], normals[(this.faceId * 3 + 1) * 3 + 1], normals[(this.faceId * 3 + 1) * 3 + 2]);
-            let normal2 = indices
+            const normal2 = indices
                 ? Vector3.FromArrayToRef(normals, indices[this.faceId * 3 + 2] * 3, tmp2)
                 : tmp2.copyFromFloats(normals[(this.faceId * 3 + 2) * 3], normals[(this.faceId * 3 + 2) * 3 + 1], normals[(this.faceId * 3 + 2) * 3 + 2]);
 
-            normal0 = normal0.scale(this.bu);
-            normal1 = normal1.scale(this.bv);
-            normal2 = normal2.scale(1.0 - this.bu - this.bv);
+            normal0.scaleInPlace(this.bu);
+            normal1.scaleInPlace(this.bv);
+            normal2.scaleInPlace(1.0 - this.bu - this.bv);
 
             result = new Vector3(normal0.x + normal1.x + normal2.x, normal0.y + normal1.y + normal2.y, normal0.z + normal1.z + normal2.z);
         } else {
@@ -116,41 +143,15 @@ export class PickingInfo {
                 ? Vector3.FromArrayToRef(positions, indices[this.faceId * 3 + 2] * 3, tmp2)
                 : tmp2.copyFromFloats(positions[(this.faceId * 3 + 2) * 3], positions[(this.faceId * 3 + 2) * 3 + 1], positions[(this.faceId * 3 + 2) * 3 + 2]);
 
-            const p1p2 = vertex1.subtract(vertex2);
-            const p3p2 = vertex3.subtract(vertex2);
+            vertex1.subtractToRef(vertex2, TmpVectors.Vector3[3]);
+            vertex3.subtractToRef(vertex2, TmpVectors.Vector3[4]);
 
-            result = Vector3.Cross(p1p2, p3p2);
+            result = new Vector3();
+            Vector3.CrossToRef(TmpVectors.Vector3[3], TmpVectors.Vector3[4], result);
         }
 
-        const transformNormalToWorld = (pickedMesh: AbstractMesh, n: Vector3) => {
-            if (this.thinInstanceIndex !== -1) {
-                const thinMatrixData = (pickedMesh as Mesh)._thinInstanceDataStorage.matrixData;
-                const index = this.thinInstanceIndex << 4;
-
-                if (thinMatrixData && thinMatrixData.length > index) {
-                    const tm = TmpVectors.Matrix[0];
-                    Matrix.FromArrayToRef(thinMatrixData, index, tm);
-                    Vector3.TransformNormalToRef(n, tm, n);
-                }
-            }
-
-            let wm = pickedMesh.getWorldMatrix();
-
-            if (pickedMesh.nonUniformScaling) {
-                TmpVectors.Matrix[0].copyFrom(wm);
-                wm = TmpVectors.Matrix[0];
-                wm.setTranslationFromFloats(0, 0, 0);
-                wm.invert();
-                wm.transposeToRef(TmpVectors.Matrix[1]);
-
-                wm = TmpVectors.Matrix[1];
-            }
-
-            Vector3.TransformNormalToRef(n, wm, n);
-        };
-
         if (useWorldCoordinates) {
-            transformNormalToWorld(this.pickedMesh, result);
+            _TransformNormalToWorld(this.pickedMesh, result, this.thinInstanceIndex);
         }
 
         if (this.ray) {
@@ -158,7 +159,7 @@ export class PickingInfo {
 
             if (!useWorldCoordinates) {
                 // the normal has not been transformed to world space as part as the normal processing, so we must do it now
-                transformNormalToWorld(this.pickedMesh, normalForDirectionChecking);
+                _TransformNormalToWorld(this.pickedMesh, normalForDirectionChecking, this.thinInstanceIndex);
             }
 
             // Flip the normal if the picking ray is in the same direction.

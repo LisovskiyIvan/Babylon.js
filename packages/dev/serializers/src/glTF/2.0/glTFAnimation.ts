@@ -12,7 +12,7 @@ import {
 } from "babylonjs-gltf2interface";
 import { type Node } from "core/node";
 import { type Nullable } from "core/types";
-import { Vector3, Quaternion } from "core/Maths/math.vector";
+import { Vector3, Quaternion, TmpVectors } from "core/Maths/math.vector";
 import { Tools } from "core/Misc/tools";
 import { Animation } from "core/Animations/animation";
 import { type AnimationGroup } from "core/Animations/animationGroup";
@@ -594,15 +594,10 @@ export class _GLTFAnimation {
              * and morphAnimationChannels * n output frames
              */
             if (morphAnimationChannels) {
-                let index = 0;
-                let currentInput: number;
+                const inputs = animationData.inputs;
                 const newInputs: number[] = [];
-                while (animationData.inputs.length > 0) {
-                    currentInput = animationData.inputs.shift()!;
-                    if (index % morphAnimationChannels == 0) {
-                        newInputs.push(currentInput);
-                    }
-                    index++;
+                for (let i = 0; i < inputs.length; i += morphAnimationChannels) {
+                    newInputs.push(inputs[i]);
                 }
                 animationData.inputs = newInputs;
             }
@@ -627,7 +622,9 @@ export class _GLTFAnimation {
 
             const elementCount = GetAccessorElementCount(dataAccessorType);
             const outputData = new Float32Array(animationData.outputs.length * elementCount);
-            animationData.outputs.forEach(function (output: number[], index: number) {
+            const outputs = animationData.outputs;
+            for (let index = 0; index < outputs.length; index++) {
+                const output = outputs[index];
                 let outputToWrite: number[] = output;
                 switch (animationChannelTargetPath) {
                     case AnimationChannelTargetPath.TRANSLATION:
@@ -657,7 +654,7 @@ export class _GLTFAnimation {
                         break;
                 }
                 outputData.set(outputToWrite, index * elementCount);
-            });
+            }
 
             // Create buffer view and accessor for keyed values.
             bufferView = bufferManager.createBufferView(outputData);
@@ -937,9 +934,9 @@ export class _GLTFAnimation {
         if (animationType === Animation.ANIMATIONTYPE_VECTOR3) {
             let value = keyFrame.value.asArray();
             if (animationChannelTargetPath === AnimationChannelTargetPath.ROTATION) {
-                const array = Vector3.FromArray(value);
-                const rotationQuaternion = Quaternion.RotationYawPitchRoll(array.y, array.x, array.z);
-                value = rotationQuaternion.asArray();
+                // RotationYawPitchRollToRef computes the exact same values as Vector3.FromArray + RotationYawPitchRoll; asArray() copies out so the scratch is safe to reuse.
+                Quaternion.RotationYawPitchRollToRef(value[1], value[0], value[2], TmpVectors.Quaternion[0]);
+                value = TmpVectors.Quaternion[0].asArray();
             }
             outputs.push(value); // scale  vector.
         } else if (animationType === Animation.ANIMATIONTYPE_FLOAT) {
@@ -956,9 +953,15 @@ export class _GLTFAnimation {
                 );
                 if (newPositionRotationOrScale) {
                     if (animationChannelTargetPath === AnimationChannelTargetPath.ROTATION) {
+                        // Same values as RotationYawPitchRoll(...).normalize(); newPositionRotationOrScale is always a fresh object (see _ConvertFactorToVector3OrQuaternion), so the scratch cannot alias it.
                         const posRotScale = useQuaternion
                             ? (newPositionRotationOrScale as Quaternion)
-                            : Quaternion.RotationYawPitchRoll(newPositionRotationOrScale.y, newPositionRotationOrScale.x, newPositionRotationOrScale.z).normalize();
+                            : Quaternion.RotationYawPitchRollToRef(
+                                  newPositionRotationOrScale.y,
+                                  newPositionRotationOrScale.x,
+                                  newPositionRotationOrScale.z,
+                                  TmpVectors.Quaternion[0]
+                              ).normalize();
                         outputs.push(posRotScale.asArray());
                     }
                     outputs.push(newPositionRotationOrScale.asArray());

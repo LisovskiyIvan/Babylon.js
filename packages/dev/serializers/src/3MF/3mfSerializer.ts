@@ -308,8 +308,9 @@ export class ThreeMfSerializer extends AbstractThreeMfSerializer<Mesh | Instance
         // Map old vertex index -> new compacted vertex index.
         const map = new Map<number, number>();
 
-        // Compacted positions (x,y,z repeated). We assemble into number[] then convert to Float32Array at the end.
-        const newPositions: number[] = [];
+        // Compacted positions (x,y,z repeated), pre-sized to the worst case (one vertex per index) to avoid number[] growth + a second copy.
+        const newPositions = new Float32Array(sm.indexCount * 3);
+        let newPositionCount = 0;
 
         // Indices for the compacted vertex buffer.
         // Uint32Array is used to support large meshes; ensure downstream 3MF writer supports 32-bit indices if needed.
@@ -326,14 +327,16 @@ export class ThreeMfSerializer extends AbstractThreeMfSerializer<Mesh | Instance
                 // Copy the corresponding position (assumes positions are 3-floats per vertex).
                 // If the source mesh uses a different stride or includes morph targets, this ignores them.
                 const p = oldVi * 3;
-                newPositions.push(allPos[p], allPos[p + 1], allPos[p + 2]);
+                newPositions[newPositionCount++] = allPos[p];
+                newPositions[newPositionCount++] = allPos[p + 1];
+                newPositions[newPositionCount++] = allPos[p + 2];
             }
 
             newIndices[i] = newVi;
         }
 
         return {
-            positions: new Float32Array(newPositions),
+            positions: newPositions.slice(0, newPositionCount),
             indices: newIndices,
         };
     }
@@ -369,6 +372,13 @@ export class ThreeMfSerializer extends AbstractThreeMfSerializer<Mesh | Instance
     private static readonly _R_BJS_TO_3MF = Matrix.RotationX(Math.PI / 2).multiply(Matrix.Scaling(1, -1, 1));
 
     /**
+     * Scratch target for the basis-change multiply in _handleBabylonTo3mfMatrixTransformToRef.
+     * Never retained: its coefficients are read out synchronously before any other call can reuse it.
+     * (The per-item Matrix3d refs passed to withBuild ARE retained by ThreeMfItem and must stay fresh allocations.)
+     */
+    private static readonly _SCRATCH_MATRIX = Matrix.Zero();
+
+    /**
      * Converts a Babylon.js 4x4 matrix into a 3MF 3x4 transform matrix and writes the result into ref.
      *
      * Babylon.js conventions:
@@ -398,7 +408,7 @@ export class ThreeMfSerializer extends AbstractThreeMfSerializer<Mesh | Instance
      * @returns ref, for chaining.
      */
     private _handleBabylonTo3mfMatrixTransformToRef(tBjs: Matrix, ref: Matrix3d): Matrix3d {
-        const tmp = tBjs.multiplyToRef(ThreeMfSerializer._R_BJS_TO_3MF, Matrix.Zero());
+        const tmp = tBjs.multiplyToRef(ThreeMfSerializer._R_BJS_TO_3MF, ThreeMfSerializer._SCRATCH_MATRIX);
         const a = tmp.m;
 
         // a is Babylon row-major storage. Extract rows 0..3, cols 0..2 in 3MF order.

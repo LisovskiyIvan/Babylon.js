@@ -119,52 +119,53 @@ function BuildRootEnd() {
 
 function BuildMeshVertexCount(geometry: Geometry) {
     const count = geometry.getIndices()?.length ? geometry.getTotalIndices() : geometry.getTotalVertices();
+    const faceCount = count / 3;
 
-    return Array(count / 3)
-        .fill(3)
-        .join(", ");
+    // "3, 3, ..., 3" without a temp array; repeat(0) + slice yields "" for the empty case, matching join on an empty array.
+    return faceCount > 0 ? "3, ".repeat(faceCount).slice(0, -2) : "";
 }
 
 function BuildMeshVertexIndices(geometry: Geometry) {
     const indices = geometry.getIndices();
     const count = indices?.length ?? geometry.getTotalVertices();
 
-    const array: number[] = [];
     if (indices !== null) {
-        for (let i = 0; i < count; i++) {
-            array.push(indices[i]);
-        }
-    } else {
-        for (let i = 0; i < count; i++) {
-            array.push(i);
-        }
+        // join formats each index identically to pushing them into a plain array first, without the copy.
+        return indices.join(", ");
+    }
+
+    const array = new Array<number>(count);
+    for (let i = 0; i < count; i++) {
+        array[i] = i;
     }
 
     return array.join(", ");
 }
 
 function BuildVector3Array(attribute: FloatArray, options: IUSDZExportOptions, stride = 3, convertToRightHanded = false) {
-    const array: string[] = [];
+    const vertexCount = Math.ceil(attribute.length / stride);
+    const array = new Array<string>(vertexCount);
 
-    for (let i = 0; i < attribute.length / stride; i++) {
+    for (let i = 0; i < vertexCount; i++) {
         const x = attribute[i * stride] * (convertToRightHanded ? -1 : 1);
         const y = attribute[i * stride + 1];
         const z = attribute[i * stride + 2];
 
-        array.push(`(${x.toPrecision(options.precision)}, ${y.toPrecision(options.precision)}, ${z.toPrecision(options.precision)})`);
+        array[i] = `(${x.toPrecision(options.precision)}, ${y.toPrecision(options.precision)}, ${z.toPrecision(options.precision)})`;
     }
 
     return array.join(", ");
 }
 
 function BuildVector2Array(attribute: FloatArray, options: IUSDZExportOptions) {
-    const array: string[] = [];
+    const vertexCount = Math.ceil(attribute.length / 2);
+    const array = new Array<string>(vertexCount);
 
-    for (let i = 0; i < attribute.length / 2; i++) {
+    for (let i = 0; i < vertexCount; i++) {
         const x = attribute[i * 2];
         const y = attribute[i * 2 + 1];
 
-        array.push(`(${x.toPrecision(options.precision)}, ${(1 - y).toPrecision(options.precision)})`);
+        array[i] = `(${x.toPrecision(options.precision)}, ${(1 - y).toPrecision(options.precision)})`;
     }
 
     return array.join(", ");

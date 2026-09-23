@@ -9,6 +9,18 @@ import { RefreshNode } from "./tools";
 import * as commonStyles from "./common.module.scss";
 import * as styles from "./nodeLink.module.scss";
 
+const RedPortColorCache = new Map<string, boolean>();
+
+function IsPureRedPortColor(color: string): boolean {
+    let isRed = RedPortColorCache.get(color);
+    if (isRed === undefined) {
+        const splitComponents = color.split("_").map((v) => parseInt(v));
+        isRed = splitComponents[0] > 0 && splitComponents[1] === 0 && splitComponents[2] === 0;
+        RedPortColorCache.set(color, isRed);
+    }
+    return isRed;
+}
+
 export class NodeLink {
     private _graphCanvas: GraphCanvasComponent;
     private _portA: NodePort | FrameNodePort;
@@ -21,6 +33,7 @@ export class NodeLink {
     private _isVisible = true;
     private _isTargetCandidate = false;
     private _gradient: Nullable<SVGLinearGradientElement>;
+    private _defs: Nullable<Element> = null;
     private _flowAnimationActive = false;
 
     public onDisposedObservable = new Observable<NodeLink>();
@@ -93,9 +106,10 @@ export class NodeLink {
         const bottom = top + rect.height / zoom;
 
         const sampleRate = 10; // Checking 10 times on the path should be enough
+        const totalLength = this._path.getTotalLength();
 
         for (let index = 0; index < 1; index += 1 / sampleRate) {
-            const point = this._path.getPointAtLength(index * this._path.getTotalLength());
+            const point = this._path.getPointAtLength(index * totalLength);
             if (left < point.x && right > point.x && top < point.y && bottom > point.y) {
                 return true;
             }
@@ -104,9 +118,9 @@ export class NodeLink {
         return false;
     }
 
-    public update(endX = 0, endY = 0, straight = false) {
+    public update(endX = 0, endY = 0, straight = false, cachedRootRect?: DOMRect) {
         const rectA = this._portA.element.getBoundingClientRect();
-        const rootRect = this._graphCanvas.canvasContainer.getBoundingClientRect();
+        const rootRect = cachedRootRect ?? this._graphCanvas.canvasContainer.getBoundingClientRect();
         const zoom = this._graphCanvas.zoom;
         const xOffset = rootRect.left;
         const yOffset = rootRect.top;
@@ -143,8 +157,7 @@ export class NodeLink {
 
         if (this._portB) {
             extractedColorB = this._graphCanvas.stateManager.getPortColor(this._portB.portData);
-            const splitComponents = extractedColorB.split("_").map((v) => parseInt(v));
-            if (splitComponents[0] > 0 && splitComponents[1] === 0 && splitComponents[2] === 0) {
+            if (IsPureRedPortColor(extractedColorB)) {
                 extractedColorB = "";
             }
         }
@@ -152,7 +165,11 @@ export class NodeLink {
         if (extractedColorB && extractedColorA !== extractedColorB) {
             // Gradient
             const svg = this._graphCanvas.svgCanvas;
-            const defs = svg.querySelector("defs") || svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "defs"));
+            let defs = this._defs && this._defs.isConnected ? this._defs : null;
+            if (!defs) {
+                defs = svg.querySelector("defs") || svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "defs"));
+                this._defs = defs;
+            }
 
             if (!this._gradient) {
                 this._gradient = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");

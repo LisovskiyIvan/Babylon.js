@@ -191,14 +191,13 @@ export class SPLATFileLoader implements ISceneLoaderPluginAsync, ISceneLoaderPlu
         const rowLength = 3 * 4 + 3 * 4 + 4 + 4;
         const vertexCount = uBuffer.length / rowLength;
 
-        const positions = [];
+        const positions = new Float32Array(vertexCount * 3);
 
         const vertexData = new VertexData();
         for (let i = 0; i < vertexCount; i++) {
-            const x = fBuffer[8 * i + 0];
-            const y = fBuffer[8 * i + 1];
-            const z = fBuffer[8 * i + 2];
-            positions.push(x, y, z);
+            positions[i * 3 + 0] = fBuffer[8 * i + 0];
+            positions[i * 3 + 1] = fBuffer[8 * i + 1];
+            positions[i * 3 + 2] = fBuffer[8 * i + 2];
         }
 
         if (parsedPLY.hasVertexColors) {

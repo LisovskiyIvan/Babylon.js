@@ -521,8 +521,9 @@ export class SolidParser {
         }
 
         const normal = new Vector3();
-        for (const key in mapVertices) {
-            const lst = mapVertices[key];
+        const vertexKeys = Object.keys(mapVertices);
+        for (let k = 0; k < vertexKeys.length; k++) {
+            const lst = mapVertices[vertexKeys[k]];
             if (lst.length < 2) {
                 continue;
             }
@@ -642,213 +643,215 @@ export class SolidParser {
             }
         }
 
-        const lines = lineLines.flat();
         // Look at each line
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim().replace(/\s\s/g, " ");
-            let result;
-            // Comment or newLine
-            if (line.length === 0 || line.charAt(0) === "#") {
-                continue;
-            } else if (SolidParser.VertexPattern.test(line)) {
-                //Get information about one position possible for the vertices
-                result = line.match(/[^ ]+/g)!; // match will return non-null due to passing regex pattern
+        for (let g = 0; g < lineLines.length; g++) {
+            const group = lineLines[g];
+            for (let i = 0; i < group.length; i++) {
+                const line = group[i].trim().replace(/\s\s/g, " ");
+                let result;
+                // Comment or newLine
+                if (line.length === 0 || line.charAt(0) === "#") {
+                    continue;
+                } else if (SolidParser.VertexPattern.test(line)) {
+                    //Get information about one position possible for the vertices
+                    result = line.match(/[^ ]+/g)!; // match will return non-null due to passing regex pattern
 
-                // Value of result with line: "v 1.0 2.0 3.0"
-                // ["v", "1.0", "2.0", "3.0"]
-                // Create a Vector3 with the position x, y, z
-                this._positions.push(new Vector3(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3])));
+                    // Value of result with line: "v 1.0 2.0 3.0"
+                    // ["v", "1.0", "2.0", "3.0"]
+                    // Create a Vector3 with the position x, y, z
+                    this._positions.push(new Vector3(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3])));
 
-                if (this._loadingOptions.importVertexColors) {
-                    if (result.length >= 7) {
-                        const r = parseFloat(result[4]);
-                        const g = parseFloat(result[5]);
-                        const b = parseFloat(result[6]);
+                    if (this._loadingOptions.importVertexColors) {
+                        if (result.length >= 7) {
+                            const r = parseFloat(result[4]);
+                            const g = parseFloat(result[5]);
+                            const b = parseFloat(result[6]);
 
-                        this._colors.push(
-                            new Color4(r > 1 ? r / 255 : r, g > 1 ? g / 255 : g, b > 1 ? b / 255 : b, result.length === 7 || result[7] === undefined ? 1 : parseFloat(result[7]))
-                        );
-                    } else {
-                        // TODO: maybe push NULL and if all are NULL to skip (and remove grayColor var).
-                        this._colors.push(this._grayColor);
+                            this._colors.push(
+                                new Color4(r > 1 ? r / 255 : r, g > 1 ? g / 255 : g, b > 1 ? b / 255 : b, result.length === 7 || result[7] === undefined ? 1 : parseFloat(result[7]))
+                            );
+                        } else {
+                            // TODO: maybe push NULL and if all are NULL to skip (and remove grayColor var).
+                            this._colors.push(this._grayColor);
+                        }
                     }
-                }
-            } else if ((result = SolidParser.NormalPattern.exec(line)) !== null) {
-                //Create a Vector3 with the normals x, y, z
-                //Value of result
-                // ["vn 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
-                //Add the Vector in the list of normals
-                this._normals.push(new Vector3(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3])));
-            } else if ((result = SolidParser.UVPattern.exec(line)) !== null) {
-                //Create a Vector2 with the normals u, v
-                //Value of result
-                // ["vt 0.1 0.2 0.3", "0.1", "0.2"]
-                //Add the Vector in the list of uvs
-                this._uvs.push(new Vector2(parseFloat(result[1]) * this._loadingOptions.UVScaling.x, parseFloat(result[2]) * this._loadingOptions.UVScaling.y));
+                } else if ((result = SolidParser.NormalPattern.exec(line)) !== null) {
+                    //Create a Vector3 with the normals x, y, z
+                    //Value of result
+                    // ["vn 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
+                    //Add the Vector in the list of normals
+                    this._normals.push(new Vector3(parseFloat(result[1]), parseFloat(result[2]), parseFloat(result[3])));
+                } else if ((result = SolidParser.UVPattern.exec(line)) !== null) {
+                    //Create a Vector2 with the normals u, v
+                    //Value of result
+                    // ["vt 0.1 0.2 0.3", "0.1", "0.2"]
+                    //Add the Vector in the list of uvs
+                    this._uvs.push(new Vector2(parseFloat(result[1]) * this._loadingOptions.UVScaling.x, parseFloat(result[2]) * this._loadingOptions.UVScaling.y));
 
-                //Identify patterns of faces
-                //Face could be defined in different type of pattern
-            } else if ((result = SolidParser.FacePattern3.exec(line)) !== null) {
-                //Value of result:
-                //["f 1/1/1 2/2/2 3/3/3", "1/1/1 2/2/2 3/3/3"...]
+                    //Identify patterns of faces
+                    //Face could be defined in different type of pattern
+                } else if ((result = SolidParser.FacePattern3.exec(line)) !== null) {
+                    //Value of result:
+                    //["f 1/1/1 2/2/2 3/3/3", "1/1/1 2/2/2 3/3/3"...]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern3(
-                    result[1].trim().split(" "), // ["1/1/1", "2/2/2", "3/3/3"]
-                    1
-                );
-            } else if ((result = SolidParser.FacePattern4.exec(line)) !== null) {
-                //Value of result:
-                //["f 1//1 2//2 3//3", "1//1 2//2 3//3"...]
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern3(
+                        result[1].trim().split(" "), // ["1/1/1", "2/2/2", "3/3/3"]
+                        1
+                    );
+                } else if ((result = SolidParser.FacePattern4.exec(line)) !== null) {
+                    //Value of result:
+                    //["f 1//1 2//2 3//3", "1//1 2//2 3//3"...]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern4(
-                    result[1].trim().split(" "), // ["1//1", "2//2", "3//3"]
-                    1
-                );
-            } else if ((result = SolidParser.FacePattern5.exec(line)) !== null) {
-                //Value of result:
-                //["f -1/-1/-1 -2/-2/-2 -3/-3/-3", "-1/-1/-1 -2/-2/-2 -3/-3/-3"...]
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern4(
+                        result[1].trim().split(" "), // ["1//1", "2//2", "3//3"]
+                        1
+                    );
+                } else if ((result = SolidParser.FacePattern5.exec(line)) !== null) {
+                    //Value of result:
+                    //["f -1/-1/-1 -2/-2/-2 -3/-3/-3", "-1/-1/-1 -2/-2/-2 -3/-3/-3"...]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern5(
-                    result[1].trim().split(" "), // ["-1/-1/-1", "-2/-2/-2", "-3/-3/-3"]
-                    1
-                );
-            } else if ((result = SolidParser.FacePattern2.exec(line)) !== null) {
-                //Value of result:
-                //["f 1/1 2/2 3/3", "1/1 2/2 3/3"...]
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern5(
+                        result[1].trim().split(" "), // ["-1/-1/-1", "-2/-2/-2", "-3/-3/-3"]
+                        1
+                    );
+                } else if ((result = SolidParser.FacePattern2.exec(line)) !== null) {
+                    //Value of result:
+                    //["f 1/1 2/2 3/3", "1/1 2/2 3/3"...]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern2(
-                    result[1].trim().split(" "), // ["1/1", "2/2", "3/3"]
-                    1
-                );
-            } else if ((result = SolidParser.FacePattern1.exec(line)) !== null) {
-                //Value of result
-                //["f 1 2 3", "1 2 3"...]
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern2(
+                        result[1].trim().split(" "), // ["1/1", "2/2", "3/3"]
+                        1
+                    );
+                } else if ((result = SolidParser.FacePattern1.exec(line)) !== null) {
+                    //Value of result
+                    //["f 1 2 3", "1 2 3"...]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern1(
-                    result[1].trim().split(" "), // ["1", "2", "3"]
-                    1
-                );
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern1(
+                        result[1].trim().split(" "), // ["1", "2", "3"]
+                        1
+                    );
 
-                // Define a mesh or an object
-                // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
-            } else if ((result = SolidParser.LinePattern1.exec(line)) !== null) {
-                //Value of result
-                //["l 1 2"]
+                    // Define a mesh or an object
+                    // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
+                } else if ((result = SolidParser.LinePattern1.exec(line)) !== null) {
+                    //Value of result
+                    //["l 1 2"]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern1(
-                    result[1].trim().split(" "), // ["1", "2"]
-                    0
-                );
-                this._hasLineData = true;
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern1(
+                        result[1].trim().split(" "), // ["1", "2"]
+                        0
+                    );
+                    this._hasLineData = true;
 
-                // Define a mesh or an object
-                // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
-            } else if ((result = SolidParser.LinePattern2.exec(line)) !== null) {
-                //Value of result
-                //["l 1/1 2/2"]
+                    // Define a mesh or an object
+                    // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
+                } else if ((result = SolidParser.LinePattern2.exec(line)) !== null) {
+                    //Value of result
+                    //["l 1/1 2/2"]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern2(
-                    result[1].trim().split(" "), // ["1/1", "2/2"]
-                    0
-                );
-                this._hasLineData = true;
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern2(
+                        result[1].trim().split(" "), // ["1/1", "2/2"]
+                        0
+                    );
+                    this._hasLineData = true;
 
-                // Define a mesh or an object
-                // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
-            } else if ((result = SolidParser._GetZbrushMRGB(line, !this._loadingOptions.importVertexColors))) {
-                for (const element of result) {
-                    this._extColors.push(element);
-                }
-            } else if ((result = SolidParser.LinePattern3.exec(line)) !== null) {
-                //Value of result
-                //["l 1/1/1 2/2/2"]
+                    // Define a mesh or an object
+                    // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
+                } else if ((result = SolidParser._GetZbrushMRGB(line, !this._loadingOptions.importVertexColors))) {
+                    for (const element of result) {
+                        this._extColors.push(element);
+                    }
+                } else if ((result = SolidParser.LinePattern3.exec(line)) !== null) {
+                    //Value of result
+                    //["l 1/1/1 2/2/2"]
 
-                //Set the data for this face
-                this._setDataForCurrentFaceWithPattern3(
-                    result[1].trim().split(" "), // ["1/1/1", "2/2/2"]
-                    0
-                );
-                this._hasLineData = true;
+                    //Set the data for this face
+                    this._setDataForCurrentFaceWithPattern3(
+                        result[1].trim().split(" "), // ["1/1/1", "2/2/2"]
+                        0
+                    );
+                    this._hasLineData = true;
 
-                // Define a mesh or an object
-                // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
-            } else if (SolidParser.GroupDescriptor.test(line) || SolidParser.ObjectDescriptor.test(line)) {
-                // Create a new mesh corresponding to the name of the group.
-                // Definition of the mesh
-                const objMesh: MeshObject = {
-                    name: line.substring(2).trim(), //Set the name of the current obj mesh
-                    indices: null,
-                    positions: null,
-                    normals: null,
-                    uvs: null,
-                    colors: null,
-                    materialName: this._materialNameFromObj,
-                    isObject: SolidParser.ObjectDescriptor.test(line),
-                };
-                this._addPreviousObjMesh();
-
-                //Push the last mesh created with only the name
-                this._meshesFromObj.push(objMesh);
-
-                //Set this variable to indicate that now meshesFromObj has objects defined inside
-                this._hasMeshes = true;
-                this._isFirstMaterial = true;
-                this._increment = 1;
-                //Keyword for applying a material
-            } else if (SolidParser.UseMtlDescriptor.test(line)) {
-                //Get the name of the material
-                this._materialNameFromObj = line.substring(7).trim();
-
-                //If this new material is in the same mesh
-
-                if (!this._isFirstMaterial || !this._hasMeshes) {
-                    //Set the data for the previous mesh
+                    // Define a mesh or an object
+                    // Each time this keyword is analyzed, create a new Object with all data for creating a babylonMesh
+                } else if (SolidParser.GroupDescriptor.test(line) || SolidParser.ObjectDescriptor.test(line)) {
+                    // Create a new mesh corresponding to the name of the group.
+                    // Definition of the mesh
+                    const objMesh: MeshObject = {
+                        name: line.substring(2).trim(), //Set the name of the current obj mesh
+                        indices: null,
+                        positions: null,
+                        normals: null,
+                        uvs: null,
+                        colors: null,
+                        materialName: this._materialNameFromObj,
+                        isObject: SolidParser.ObjectDescriptor.test(line),
+                    };
                     this._addPreviousObjMesh();
-                    //Create a new mesh
-                    const objMesh: MeshObject =
-                        //Set the name of the current obj mesh
-                        {
-                            name: (this._objMeshName || "mesh") + "_mm" + this._increment.toString(), //Set the name of the current obj mesh
-                            indices: null,
-                            positions: null,
-                            normals: null,
-                            uvs: null,
-                            colors: null,
-                            materialName: this._materialNameFromObj,
-                            isObject: false,
-                        };
-                    this._increment++;
-                    //If meshes are already defined
+
+                    //Push the last mesh created with only the name
                     this._meshesFromObj.push(objMesh);
+
+                    //Set this variable to indicate that now meshesFromObj has objects defined inside
                     this._hasMeshes = true;
-                }
-                //Set the material name if the previous line define a mesh
+                    this._isFirstMaterial = true;
+                    this._increment = 1;
+                    //Keyword for applying a material
+                } else if (SolidParser.UseMtlDescriptor.test(line)) {
+                    //Get the name of the material
+                    this._materialNameFromObj = line.substring(7).trim();
 
-                if (this._hasMeshes && this._isFirstMaterial) {
-                    //Set the material name to the previous mesh (1 material per mesh)
-                    this._meshesFromObj[this._meshesFromObj.length - 1].materialName = this._materialNameFromObj;
-                    this._isFirstMaterial = false;
-                }
-                // Keyword for loading the mtl file
-            } else if (SolidParser.MtlLibGroupDescriptor.test(line)) {
-                // Get the name of mtl file
-                onFileToLoadFound(line.substring(7).trim());
+                    //If this new material is in the same mesh
 
-                // Apply smoothing
-            } else if (SolidParser.SmoothDescriptor.test(line)) {
-                // smooth shading => apply smoothing
-                // Today I don't know it work with babylon and with obj.
-                // With the obj file  an integer is set
-            } else {
-                //If there is another possibility
-                Logger.Log("Unhandled expression at line : " + line);
+                    if (!this._isFirstMaterial || !this._hasMeshes) {
+                        //Set the data for the previous mesh
+                        this._addPreviousObjMesh();
+                        //Create a new mesh
+                        const objMesh: MeshObject =
+                            //Set the name of the current obj mesh
+                            {
+                                name: (this._objMeshName || "mesh") + "_mm" + this._increment.toString(), //Set the name of the current obj mesh
+                                indices: null,
+                                positions: null,
+                                normals: null,
+                                uvs: null,
+                                colors: null,
+                                materialName: this._materialNameFromObj,
+                                isObject: false,
+                            };
+                        this._increment++;
+                        //If meshes are already defined
+                        this._meshesFromObj.push(objMesh);
+                        this._hasMeshes = true;
+                    }
+                    //Set the material name if the previous line define a mesh
+
+                    if (this._hasMeshes && this._isFirstMaterial) {
+                        //Set the material name to the previous mesh (1 material per mesh)
+                        this._meshesFromObj[this._meshesFromObj.length - 1].materialName = this._materialNameFromObj;
+                        this._isFirstMaterial = false;
+                    }
+                    // Keyword for loading the mtl file
+                } else if (SolidParser.MtlLibGroupDescriptor.test(line)) {
+                    // Get the name of mtl file
+                    onFileToLoadFound(line.substring(7).trim());
+
+                    // Apply smoothing
+                } else if (SolidParser.SmoothDescriptor.test(line)) {
+                    // smooth shading => apply smoothing
+                    // Today I don't know it work with babylon and with obj.
+                    // With the obj file  an integer is set
+                } else {
+                    //If there is another possibility
+                    Logger.Log("Unhandled expression at line : " + line);
+                }
             }
         }
         // At the end of the file, add the last mesh into the meshesFromObj array

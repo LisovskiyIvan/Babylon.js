@@ -10,6 +10,8 @@ import { type GaussianCloud, type SpzModule, type SpzExtensionSafeOrbitCameraAdo
 
 const _SpzConversionBatchSize = 32768;
 const _SH_C0 = 0.28209479177387814;
+// Maps decoded quaternion component slots to packed wxyz output order.
+const _SpzQuaternionShuffle = [3, 0, 1, 2];
 
 // Cached WASM module promise — initialized once, reused across all SPZ loads.
 let _SpzModulePromise: Promise<SpzModule> | null = null;
@@ -104,13 +106,11 @@ export function ParseSpz(data: ArrayBuffer, scene: Scene, _loadingOptions: SPLAT
             and each of the smallest three components is encoded as a 10-bit signed integer.
         */
         const sqrt12 = Math.SQRT1_2;
+        const rotation = [0, 0, 0, 0];
         for (let i = 0; i < splatCount; i++) {
-            const r = [ubuf[byteOffset + 0], ubuf[byteOffset + 1], ubuf[byteOffset + 2], ubuf[byteOffset + 3]];
-
-            const comp = r[0] + (r[1] << 8) + (r[2] << 16) + (r[3] << 24);
+            const comp = ubuf[byteOffset + 0] + (ubuf[byteOffset + 1] << 8) + (ubuf[byteOffset + 2] << 16) + (ubuf[byteOffset + 3] << 24);
 
             const cmask = (1 << 9) - 1;
-            const rotation = [];
             const iLargest = comp >>> 30;
             let remaining = comp;
             let sumSquares = 0;
@@ -134,9 +134,8 @@ export function ParseSpz(data: ArrayBuffer, scene: Scene, _loadingOptions: SPLAT
             const square = 1 - sumSquares;
             rotation[iLargest] = Math.sqrt(Math.max(square, 0));
 
-            const shuffle = [3, 0, 1, 2]; // shuffle to match the order of the quaternion components in the splat file
             for (let j = 0; j < 4; j++) {
-                rot[i * 32 + 28 + j] = Math.round(127.5 + rotation[shuffle[j]] * 127.5);
+                rot[i * 32 + 28 + j] = Math.round(127.5 + rotation[_SpzQuaternionShuffle[j]] * 127.5);
             }
 
             byteOffset += 4;
@@ -183,15 +182,19 @@ export function ParseSpz(data: ArrayBuffer, scene: Scene, _loadingOptions: SPLAT
         const sh = AllocateShBuffers(textureCount, height * width * 4 * 4);
 
         for (let i = 0; i < splatCount; i++) {
+            let textureIndex = 0;
+            let byteIndexInTexture = 0; // [0..15]
+            const offsetPerSplat = i * 16; // 16 sh values per texture per splat.
             for (let shIndexWrite = 0; shIndexWrite < shComponentCount; shIndexWrite++) {
                 const shValue = ubuf[shIndexRead++];
 
-                const textureIndex = Math.floor(shIndexWrite / 16);
                 const shArray = sh[textureIndex];
-
-                const byteIndexInTexture = shIndexWrite % 16; // [0..15]
-                const offsetPerSplat = i * 16; // 16 sh values per texture per splat.
                 shArray[byteIndexInTexture + offsetPerSplat] = shValue;
+
+                if (++byteIndexInTexture === 16) {
+                    byteIndexInTexture = 0;
+                    textureIndex++;
+                }
             }
         }
 

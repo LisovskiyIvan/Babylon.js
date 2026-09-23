@@ -572,21 +572,30 @@ export class CSG {
                 vertices = [];
                 for (let j = 0; j < 3; j++) {
                     const indexIndices = j === 0 ? i + j : invertWinding ? i + 3 - j : i + j;
-                    const sourceNormal = new Vector3(normals[indices[indexIndices] * 3], normals[indices[indexIndices] * 3 + 1], normals[indices[indexIndices] * 3 + 2]);
+                    const vertexIndex = indices[indexIndices];
+                    // Transform straight from the component floats into the stored vectors
+                    // (same math as TransformCoordinates/TransformNormal, minus the temporaries).
+                    position = new Vector3();
+                    Vector3.TransformCoordinatesFromFloatsToRef(
+                        positions[vertexIndex * 3],
+                        positions[vertexIndex * 3 + 1],
+                        positions[vertexIndex * 3 + 2],
+                        matrix,
+                        position
+                    );
+                    normal = new Vector3();
+                    Vector3.TransformNormalFromFloatsToRef(normals[vertexIndex * 3], normals[vertexIndex * 3 + 1], normals[vertexIndex * 3 + 2], matrix, normal);
                     if (uvs) {
-                        uv = new Vector2(uvs[indices[indexIndices] * 2], uvs[indices[indexIndices] * 2 + 1]);
+                        uv = new Vector2(uvs[vertexIndex * 2], uvs[vertexIndex * 2 + 1]);
                     }
                     if (vertColors) {
                         vertColor = new Color4(
-                            vertColors[indices[indexIndices] * 4],
-                            vertColors[indices[indexIndices] * 4 + 1],
-                            vertColors[indices[indexIndices] * 4 + 2],
-                            vertColors[indices[indexIndices] * 4 + 3]
+                            vertColors[vertexIndex * 4],
+                            vertColors[vertexIndex * 4 + 1],
+                            vertColors[vertexIndex * 4 + 2],
+                            vertColors[vertexIndex * 4 + 3]
                         );
                     }
-                    const sourcePosition = new Vector3(positions[indices[indexIndices] * 3], positions[indices[indexIndices] * 3 + 1], positions[indices[indexIndices] * 3 + 2]);
-                    position = Vector3.TransformCoordinates(sourcePosition, matrix);
-                    normal = Vector3.TransformNormal(sourceNormal, matrix);
 
                     vertex = new Vertex(position, normal, uv, vertColor);
                     vertices.push(vertex);

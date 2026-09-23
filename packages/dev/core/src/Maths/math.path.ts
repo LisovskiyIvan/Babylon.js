@@ -724,7 +724,10 @@ export class Path3D {
             slicePoints.push(startPoint);
         }
 
-        slicePoints.push(...curvePoints.slice(startIndex, endIndex));
+        const slicedEnd = Math.min(endIndex, curvePoints.length);
+        for (let i = startIndex; i < slicedEnd; i++) {
+            slicePoints.push(curvePoints[i]);
+        }
         if (end !== 1.0 || start === 1.0) {
             slicePoints.push(endPoint);
         }

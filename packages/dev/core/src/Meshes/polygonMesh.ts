@@ -314,6 +314,14 @@ export class PolygonMeshBuilder {
     private _addSide(positions: any[], normals: any[], uvs: any[], indices: any[], bounds: any, points: PolygonPoints, depth: number, flip: boolean, smoothingThreshold: number) {
         let startIndex: number = positions.length / 3;
         let ulength: number = 0;
+        // Scratch vectors reused for every contour point (only components are stored below).
+        const vc = new Vector3();
+        const vp = new Vector3();
+        const vn = new Vector3();
+        const vcNorm = new Vector3();
+        const vpNorm = new Vector3();
+        const vnNorm = new Vector3();
+        const tmp = new Vector3();
         for (let i: number = 0; i < points.elements.length; i++) {
             const p: IndexedVector2 = points.elements[i];
             const p1: IndexedVector2 = points.elements[(i + 1) % points.elements.length];
@@ -326,43 +334,48 @@ export class PolygonMeshBuilder {
             const p0: IndexedVector2 = points.elements[(i + points.elements.length - 1) % points.elements.length];
             const p2: IndexedVector2 = points.elements[(i + 2) % points.elements.length];
 
-            let vc = new Vector3(-(p1.y - p.y), 0, p1.x - p.x);
-            let vp = new Vector3(-(p.y - p0.y), 0, p.x - p0.x);
-            let vn = new Vector3(-(p2.y - p1.y), 0, p2.x - p1.x);
+            vc.set(-(p1.y - p.y), 0, p1.x - p.x);
+            vp.set(-(p.y - p0.y), 0, p.x - p0.x);
+            vn.set(-(p2.y - p1.y), 0, p2.x - p1.x);
 
             if (!flip) {
-                vc = vc.scale(-1);
-                vp = vp.scale(-1);
-                vn = vn.scale(-1);
+                vc.scaleInPlace(-1);
+                vp.scaleInPlace(-1);
+                vn.scaleInPlace(-1);
             }
 
-            const vcNorm = vc.normalizeToNew();
-            let vpNorm = vp.normalizeToNew();
-            let vnNorm: Vector3;
+            vc.normalizeToRef(vcNorm);
+            vp.normalizeToRef(vpNorm);
 
             const dotp = Vector3.Dot(vpNorm, vcNorm);
             if (dotp > smoothingThreshold) {
                 if (dotp < Epsilon - 1) {
-                    vpNorm = new Vector3(p.x, 0, p.y).subtract(new Vector3(p1.x, 0, p1.y)).normalize();
+                    tmp.set(p.x - p1.x, 0, p.y - p1.y);
+                    tmp.normalize();
+                    vpNorm.copyFrom(tmp);
                 } else {
                     // cheap average weighed by side length
-                    vpNorm = vp.add(vc).normalize();
+                    vp.addToRef(vc, vpNorm);
+                    vpNorm.normalize();
                 }
             } else {
-                vpNorm = vcNorm;
+                vpNorm.copyFrom(vcNorm);
             }
 
             const dotn = Vector3.Dot(vn, vc);
             if (dotn > smoothingThreshold) {
                 if (dotn < Epsilon - 1) {
                     // back to back
-                    vnNorm = new Vector3(p1.x, 0, p1.y).subtract(new Vector3(p.x, 0, p.y)).normalize();
+                    tmp.set(p1.x - p.x, 0, p1.y - p.y);
+                    tmp.normalize();
+                    vnNorm.copyFrom(tmp);
                 } else {
                     // cheap average weighed by side length
-                    vnNorm = vn.add(vc).normalize();
+                    vn.addToRef(vc, vnNorm);
+                    vnNorm.normalize();
                 }
             } else {
-                vnNorm = vcNorm;
+                vnNorm.copyFrom(vcNorm);
             }
 
             uvs.push(ulength / bounds.width, 0);

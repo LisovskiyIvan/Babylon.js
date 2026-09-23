@@ -175,23 +175,41 @@ export class AggregatorBlock extends NodeGeometryBlock implements INodeGeometryE
                     break;
                 }
                 case NodeGeometryBlockConnectionPointTypes.Vector2: {
-                    const x = (context as Vector2[]).map((v) => v.x).reduce(func);
-                    const y = (context as Vector2[]).map((v) => v.y).reduce(func);
+                    const vectors = context as Vector2[];
+                    let x = vectors[0].x;
+                    let y = vectors[0].y;
+                    for (let i = 1; i < vectors.length; i++) {
+                        x = func(x, vectors[i].x);
+                        y = func(y, vectors[i].y);
+                    }
                     returnValue = new Vector2(x, y);
                     break;
                 }
                 case NodeGeometryBlockConnectionPointTypes.Vector3: {
-                    const x = (context as Vector3[]).map((v) => v.x).reduce(func);
-                    const y = (context as Vector3[]).map((v) => v.y).reduce(func);
-                    const z = (context as Vector3[]).map((v) => v.z).reduce(func);
+                    const vectors = context as Vector3[];
+                    let x = vectors[0].x;
+                    let y = vectors[0].y;
+                    let z = vectors[0].z;
+                    for (let i = 1; i < vectors.length; i++) {
+                        x = func(x, vectors[i].x);
+                        y = func(y, vectors[i].y);
+                        z = func(z, vectors[i].z);
+                    }
                     returnValue = new Vector3(x, y, z);
                     break;
                 }
                 case NodeGeometryBlockConnectionPointTypes.Vector4: {
-                    const x = (context as Vector4[]).map((v) => v.x).reduce(func);
-                    const y = (context as Vector4[]).map((v) => v.y).reduce(func);
-                    const z = (context as Vector4[]).map((v) => v.z).reduce(func);
-                    const w = (context as Vector4[]).map((v) => v.w).reduce(func);
+                    const vectors = context as Vector4[];
+                    let x = vectors[0].x;
+                    let y = vectors[0].y;
+                    let z = vectors[0].z;
+                    let w = vectors[0].w;
+                    for (let i = 1; i < vectors.length; i++) {
+                        x = func(x, vectors[i].x);
+                        y = func(y, vectors[i].y);
+                        z = func(z, vectors[i].z);
+                        w = func(w, vectors[i].w);
+                    }
                     returnValue = new Vector4(x, y, z, w);
                     break;
                 }

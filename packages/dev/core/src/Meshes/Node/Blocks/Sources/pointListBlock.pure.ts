@@ -51,10 +51,14 @@ export class PointListBlock extends NodeGeometryBlock {
             }
 
             const vertexData = new VertexData();
-            vertexData.positions = this.points.reduce((acc, point) => {
-                acc.push(point.x, point.y, point.z);
-                return acc;
-            }, [] as number[]);
+            const points = this.points;
+            const positions = new Array<number>(points.length * 3);
+            for (let i = 0; i < points.length; i++) {
+                positions[i * 3] = points[i].x;
+                positions[i * 3 + 1] = points[i].y;
+                positions[i * 3 + 2] = points[i].z;
+            }
+            vertexData.positions = positions;
 
             return vertexData;
         };

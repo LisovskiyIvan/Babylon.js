@@ -44,8 +44,11 @@ export class ColorPickerLineComponent extends React.Component<IColorPickerLineCo
             return;
         }
 
-        let top = host.getBoundingClientRect().top;
-        const height = div.getBoundingClientRect().height;
+        const hostRect = host.getBoundingClientRect();
+        const divRect = div.getBoundingClientRect();
+
+        let top = hostRect.top;
+        const height = divRect.height;
 
         if (top + height + 10 > window.innerHeight) {
             top = window.innerHeight - height - 10;
@@ -53,9 +56,9 @@ export class ColorPickerLineComponent extends React.Component<IColorPickerLineCo
 
         div.style.top = top + "px";
         if (!this.props.shouldPopRight) {
-            div.style.left = host.getBoundingClientRect().left - div.getBoundingClientRect().width + "px";
+            div.style.left = hostRect.left - divRect.width + "px";
         } else {
-            div.style.left = host.getBoundingClientRect().left + "px";
+            div.style.left = hostRect.left + "px";
         }
     }
 

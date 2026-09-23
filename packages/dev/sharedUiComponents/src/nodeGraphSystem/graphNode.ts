@@ -444,8 +444,9 @@ export class GraphNode {
         if (this._ownerCanvas._isLoading) {
             return;
         }
+        const rootRect = this._ownerCanvas.canvasContainer.getBoundingClientRect();
         for (const link of this._links) {
-            link.update();
+            link.update(0, 0, false, rootRect);
         }
     }
 

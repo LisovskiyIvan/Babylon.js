@@ -54,10 +54,11 @@ export const RefreshNode = (node: GraphNode, visitedNodes?: Set<GraphNode>, visi
     }
 
     // then refresh the links to display the right color between ports
+    const rootRect = canvas?.canvasContainer.getBoundingClientRect();
     for (const link of links) {
         if (!visitedLinks.has(link)) {
             visitedLinks.add(link);
-            link.update();
+            link.update(0, 0, false, rootRect);
         }
     }
 };

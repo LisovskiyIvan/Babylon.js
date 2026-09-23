@@ -165,11 +165,12 @@ export class FlowGraphInterpolationBlock<T> extends FlowGraphBlock {
             animation.setKeys(keys);
             return [animation];
         } else {
-            const animations = propertyName.map((name) => {
-                const animation = AnimationCreateAnimation(name, type.animationType, 60, easingFunction);
+            const animations: Animation[] = [];
+            for (let i = 0; i < propertyName.length; i++) {
+                const animation = AnimationCreateAnimation(propertyName[i], type.animationType, 60, easingFunction);
                 animation.setKeys(keys);
-                return animation;
-            });
+                animations.push(animation);
+            }
             return animations;
         }
     }

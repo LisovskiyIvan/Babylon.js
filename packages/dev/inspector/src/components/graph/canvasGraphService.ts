@@ -150,6 +150,7 @@ export class CanvasGraphService {
     private _tooltipTextCache: IPerfTextMeasureCache;
     private _tickerTextCache: IPerfTextMeasureCache;
     private _tickerItems: IPerfTicker[];
+    private _tickerById: Map<string, IPerfTicker>;
     private _preprocessedTooltipInfo: ITooltipPreprocessedInformation;
     private _numberOfTickers: number;
     private _onVisibleRangeChangedObservable?: Observable<IVisibleRangeChangedObservableProps>;
@@ -181,6 +182,7 @@ export class CanvasGraphService {
         this._tickerTextCache = { text: "", width: 0 };
         this._tooltipItems = [];
         this._tickerItems = [];
+        this._tickerById = new Map<string, IPerfTicker>();
         this._preprocessedTooltipInfo = { focusedId: "", longestText: "", numberOfTooltipItems: 0, xForActualTimestamp: 0 };
         this._numberOfTickers = 0;
         this._onVisibleRangeChangedObservable = settings.onVisibleRangeChangedObservable;
@@ -334,14 +336,9 @@ export class CanvasGraphService {
             let valueMinMax: IPerfMinMax | undefined;
             let prevPoint = this._prevPointById.get(id);
             let prevValue = this._prevValueById.get(id);
-            let ticker = false;
 
-            for (let i = 0; i < this._numberOfTickers; i++) {
-                if (this._tickerItems[i].id === id) {
-                    ticker = true;
-                }
-            }
-            if (!ticker) {
+            // Map lookup replaces the previous per-id linear scan over the tickers.
+            if (!this._tickerById.has(id)) {
                 return;
             }
 
@@ -437,6 +434,7 @@ export class CanvasGraphService {
         // create the ticker objects for each of the non hidden items.
         let longestText: string = "";
         this._numberOfTickers = 0;
+        this._tickerById.clear();
         const valueMap = new Map<string, IPerfMinMax>();
         for (let idOffset = 0; idOffset < this.datasets.ids.length; idOffset++) {
             const id = this.datasets.ids[idOffset];
@@ -459,6 +457,7 @@ export class CanvasGraphService {
             this._tickerItems[this._numberOfTickers].max = valueMinMax.max;
             this._tickerItems[this._numberOfTickers].min = valueMinMax.min;
             this._tickerItems[this._numberOfTickers].text = text;
+            this._tickerById.set(id, this._tickerItems[this._numberOfTickers]);
             this._numberOfTickers++;
         }
         this._onVisibleRangeChangedObservable?.notifyObservers({ valueMap });
@@ -877,35 +876,35 @@ export class CanvasGraphService {
         let closestLineValueMinMax: IPerfMinMax = { min: 0, max: 0 };
         let closestLineDistance: number = Number.POSITIVE_INFINITY;
 
+        // Hoisted per-invocation lookups: at() is a pure read, so these locals are
+        // identical to re-reading them for every dataset id below.
+        const closestSliceStart = this.datasets.startingIndices.at(closestIndex);
+        const nextSliceStart = this.datasets.startingIndices.at(closestIndex + 1);
+        const prevSliceStart = this.datasets.startingIndices.at(closestIndex - 1);
+        const closestSlicePointCount = this.datasets.data.at(closestSliceStart + PerformanceViewerCollector.NumberOfPointsOffset);
+        const mouseX = pos.xPos - left;
+
         for (let idOffset = 0; idOffset < this.datasets.ids.length; idOffset++) {
             const id = this.datasets.ids[idOffset];
             if (this.metadata.get(id)?.hidden) {
                 continue;
             }
 
-            const numPoints = this.datasets.data.at(this.datasets.startingIndices.at(closestIndex) + PerformanceViewerCollector.NumberOfPointsOffset);
-
-            if (idOffset >= numPoints) {
+            if (idOffset >= closestSlicePointCount) {
                 continue;
             }
 
-            const valueAtClosestPointIndex = this.datasets.startingIndices.at(closestIndex) + PerformanceViewerCollector.SliceDataOffset + idOffset;
+            const valueAtClosestPointIndex = closestSliceStart + PerformanceViewerCollector.SliceDataOffset + idOffset;
             const valueAtClosestPoint = this.datasets.data.at(valueAtClosestPointIndex);
 
-            let valueMinMax: IPerfMinMax | undefined;
-
-            // we would have already calculated  the min and max while getting the tickers, so use those, and get first one.
-            for (let i = 0; i < this._numberOfTickers; i++) {
-                if (this._tickerItems[i].id === id) {
-                    valueMinMax = this._tickerItems[i];
-                }
-            }
+            // we would have already calculated the min and max while getting the tickers, so use those.
+            const valueMinMax = this._tickerById.get(id);
 
             if (!valueMinMax) {
                 continue;
             }
 
-            actualTimestamp = this.datasets.data.at(this.datasets.startingIndices.at(closestIndex));
+            actualTimestamp = this.datasets.data.at(closestSliceStart);
             const valueAtClosestPointYPos = this._getPixelForNumber(valueAtClosestPoint, valueMinMax, drawableArea.top, drawableArea.bottom - drawableArea.top, true);
             const xForActualTimestamp = this._getPixelForNumber(actualTimestamp, this._globalTimeMinMax, drawableArea.left, drawableArea.right - drawableArea.left, false);
 
@@ -929,28 +928,25 @@ export class CanvasGraphService {
                 valueAtClosestPointYPos,
                 xForActualTimestamp,
                 valueAtClosestPointYPos,
-                pos.xPos - left,
+                mouseX,
                 adjustedYPos
             );
 
             // get the shortest distance between the point and the line segment infront, and line segment behind, store the shorter distance (if shorter than distance between closest data point and mouse).
-            if (
-                closestIndex + 1 < this.datasets.data.itemLength &&
-                this.datasets.data.at(this.datasets.startingIndices.at(closestIndex + 1) + PerformanceViewerCollector.NumberOfPointsOffset) > idOffset
-            ) {
-                const secondPointTimestamp = this.datasets.data.at(this.datasets.startingIndices.at(closestIndex + 1));
+            if (closestIndex + 1 < this.datasets.data.itemLength && this.datasets.data.at(nextSliceStart + PerformanceViewerCollector.NumberOfPointsOffset) > idOffset) {
+                const secondPointTimestamp = this.datasets.data.at(nextSliceStart);
                 const secondPointX = this._getPixelForNumber(secondPointTimestamp, this._globalTimeMinMax, drawableArea.left, drawableArea.right - drawableArea.left, false);
-                const secondPointValue = this.datasets.data.at(this.datasets.startingIndices.at(closestIndex + 1) + PerformanceViewerCollector.SliceDataOffset + idOffset);
+                const secondPointValue = this.datasets.data.at(nextSliceStart + PerformanceViewerCollector.SliceDataOffset + idOffset);
                 const secondPointY = this._getPixelForNumber(secondPointValue, valueMinMax, drawableArea.top, drawableArea.bottom - drawableArea.top, true);
-                distance = Math.min(this._getDistanceFromLine(xForActualTimestamp, valueAtClosestPointYPos, secondPointX, secondPointY, pos.xPos - left, adjustedYPos), distance);
+                distance = Math.min(this._getDistanceFromLine(xForActualTimestamp, valueAtClosestPointYPos, secondPointX, secondPointY, mouseX, adjustedYPos), distance);
             }
 
-            if (closestIndex - 1 >= 0 && this.datasets.data.at(this.datasets.startingIndices.at(closestIndex + 1) + PerformanceViewerCollector.NumberOfPointsOffset) > idOffset) {
-                const secondPointTimestamp = this.datasets.data.at(this.datasets.startingIndices.at(closestIndex - 1));
+            if (closestIndex - 1 >= 0 && this.datasets.data.at(nextSliceStart + PerformanceViewerCollector.NumberOfPointsOffset) > idOffset) {
+                const secondPointTimestamp = this.datasets.data.at(prevSliceStart);
                 const secondPointX = this._getPixelForNumber(secondPointTimestamp, this._globalTimeMinMax, drawableArea.left, drawableArea.right - drawableArea.left, false);
-                const secondPointValue = this.datasets.data.at(this.datasets.startingIndices.at(closestIndex - 1) + PerformanceViewerCollector.SliceDataOffset + idOffset);
+                const secondPointValue = this.datasets.data.at(prevSliceStart + PerformanceViewerCollector.SliceDataOffset + idOffset);
                 const secondPointY = this._getPixelForNumber(secondPointValue, valueMinMax, drawableArea.top, drawableArea.bottom - drawableArea.top, true);
-                distance = Math.min(this._getDistanceFromLine(xForActualTimestamp, valueAtClosestPointYPos, secondPointX, secondPointY, pos.xPos - left, adjustedYPos), distance);
+                distance = Math.min(this._getDistanceFromLine(xForActualTimestamp, valueAtClosestPointYPos, secondPointX, secondPointY, mouseX, adjustedYPos), distance);
             }
 
             if (distance < closestLineDistance) {

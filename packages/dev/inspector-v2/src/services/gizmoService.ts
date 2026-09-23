@@ -400,8 +400,28 @@ export const GizmoServiceDefinition: ServiceDefinition<[IGizmoService], [ISceneC
             getCameraGizmo,
             getLightGizmo,
             getSpatialAudioGizmo,
-            getCameraGizmos: (scene) => scene.cameras.map((camera) => cameraGizmos.get(camera)?.gizmo).filter(Boolean) as readonly CameraGizmo[],
-            getLightGizmos: (scene) => scene.lights.map((light) => lightGizmos.get(light)?.gizmo).filter(Boolean) as readonly LightGizmo[],
+            getCameraGizmos: (scene) => {
+                // Single loop: identical result to the previous map().filter(Boolean), without the intermediate array.
+                const gizmos: CameraGizmo[] = [];
+                for (const camera of scene.cameras) {
+                    const gizmo = cameraGizmos.get(camera)?.gizmo;
+                    if (gizmo) {
+                        gizmos.push(gizmo);
+                    }
+                }
+                return gizmos;
+            },
+            getLightGizmos: (scene) => {
+                // Single loop: identical result to the previous map().filter(Boolean), without the intermediate array.
+                const gizmos: LightGizmo[] = [];
+                for (const light of scene.lights) {
+                    const gizmo = lightGizmos.get(light)?.gizmo;
+                    if (gizmo) {
+                        gizmos.push(gizmo);
+                    }
+                }
+                return gizmos;
+            },
 
             get gizmoMode() {
                 return gizmoModeState;

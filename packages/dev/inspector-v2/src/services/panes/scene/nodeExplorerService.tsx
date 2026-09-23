@@ -70,26 +70,32 @@ export const NodeExplorerServiceDefinition: ServiceDefinition<[], [ISceneExplore
 
                 // Ensure all nodes in the scene are reachable in the explorer, even if their
                 // parent was removed from the scene or is not a type shown in the Nodes section.
-                for (const node of [...scene.meshes, ...scene.transformNodes, ...scene.cameras, ...scene.lights]) {
-                    knownSceneNodes.add(node);
+                // (Nested loops over the four lists: same enumeration as the previous spread
+                // copy, without the per-call combined array allocation. Set semantics make
+                // the result independent of enumeration order.)
+                const nodeLists: readonly Node[][] = [scene.meshes, scene.transformNodes, scene.cameras, scene.lights];
+                for (const nodes of nodeLists) {
+                    for (const node of nodes) {
+                        knownSceneNodes.add(node);
 
-                    if (!node.parent) {
-                        continue;
-                    }
-
-                    if (!IsNodesSectionType(node.parent)) {
-                        // Parent is not a type shown in the Nodes section (e.g. a Bone).
-                        // Treat this node as a root so it still appears in the explorer.
-                        rootNodes.add(node);
-                    } else {
-                        // Walk up through Nodes-section-type parents to find the topmost ancestor.
-                        // If that ancestor was removed from the scene (not in rootNodes), add it
-                        // so the entire subtree remains visible in the explorer.
-                        let ancestor: Node = node.parent;
-                        while (ancestor.parent && IsNodesSectionType(ancestor.parent)) {
-                            ancestor = ancestor.parent;
+                        if (!node.parent) {
+                            continue;
                         }
-                        rootNodes.add(ancestor);
+
+                        if (!IsNodesSectionType(node.parent)) {
+                            // Parent is not a type shown in the Nodes section (e.g. a Bone).
+                            // Treat this node as a root so it still appears in the explorer.
+                            rootNodes.add(node);
+                        } else {
+                            // Walk up through Nodes-section-type parents to find the topmost ancestor.
+                            // If that ancestor was removed from the scene (not in rootNodes), add it
+                            // so the entire subtree remains visible in the explorer.
+                            let ancestor: Node = node.parent;
+                            while (ancestor.parent && IsNodesSectionType(ancestor.parent)) {
+                                ancestor = ancestor.parent;
+                            }
+                            rootNodes.add(ancestor);
+                        }
                     }
                 }
 

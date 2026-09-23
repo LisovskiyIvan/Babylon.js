@@ -816,6 +816,11 @@ export function RegisterTargetForLateAnimationBinding(scene: Scene, runtimeAnima
     }
 }
 
+/** @internal */
+function _CompareAnimatablesByPlayOrder(a: Animatable, b: Animatable): number {
+    return a.playOrder - b.playOrder;
+}
+
 /**
  * Initialize all the inter dependecies between the animations and Scene and Bone
  * @param sceneClass defines the scene prototype to use
@@ -966,9 +971,7 @@ export function AddAnimationExtensions(sceneClass: typeof Scene, boneClass: type
     };
 
     sceneClass.prototype.sortActiveAnimatables = function (): void {
-        this._activeAnimatables.sort((a, b) => {
-            return a.playOrder - b.playOrder;
-        });
+        this._activeAnimatables.sort(_CompareAnimatablesByPlayOrder);
     };
 
     sceneClass.prototype.beginWeightedAnimation = function (

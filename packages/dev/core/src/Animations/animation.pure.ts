@@ -86,6 +86,10 @@ export interface _IAnimationState {
     loopMode?: number;
     offsetValue?: any;
     highLimitValue?: any;
+    /** Cached clone of highLimitValue for CONSTANT loop mode, so evaluate() does not clone on every call */
+    highLimitClone?: any;
+    /** The value highLimitClone was cloned from, used to invalidate the cache when highLimitValue changes */
+    highLimitCloneSource?: any;
 }
 
 const EvaluateAnimationState: _IAnimationState = {
@@ -93,6 +97,14 @@ const EvaluateAnimationState: _IAnimationState = {
     repeatCount: 0,
     loopMode: 2 /*Animation.ANIMATIONLOOPMODE_CONSTANT*/,
 };
+
+// Scratch values for _interpolate: RELATIVE-mode offsets are computed here
+// instead of allocating via .scale() on every evaluate.
+const _QuaternionOffset = /*#__PURE__*/ new Quaternion();
+const _Vector3Offset = /*#__PURE__*/ Vector3.Zero();
+const _Vector2Offset = /*#__PURE__*/ Vector2.Zero();
+const _Color3Offset = /*#__PURE__*/ new Color3();
+const _Color4Offset = /*#__PURE__*/ new Color4();
 
 /**
  * Class used to store any kind of animation
@@ -582,7 +594,10 @@ export class Animation {
      */
     public evaluate(currentFrame: number) {
         EvaluateAnimationState.key = 0;
-        return this._interpolate(currentFrame, EvaluateAnimationState);
+        const value = this._interpolate(currentFrame, EvaluateAnimationState);
+        // Public API: return a fresh copy so a caller mutating the result cannot poison
+        // the cached high-limit clone used by the per-frame internal path.
+        return value && value.clone && value === EvaluateAnimationState.highLimitClone ? value.clone() : value;
     }
 
     /** @internal */
@@ -593,7 +608,16 @@ export class Animation {
      */
     public _interpolate(currentFrame: number, state: _IAnimationState, searchClosestKeyOnly = false): any {
         if (state.loopMode === Animation.ANIMATIONLOOPMODE_CONSTANT && state.repeatCount > 0) {
-            return state.highLimitValue.clone ? state.highLimitValue.clone() : state.highLimitValue;
+            const highLimitValue = state.highLimitValue;
+            if (highLimitValue && highLimitValue.clone) {
+                // Clone once per high-limit identity: callers only read the result (setValue copies it).
+                if (state.highLimitCloneSource !== highLimitValue) {
+                    state.highLimitClone = highLimitValue.clone();
+                    state.highLimitCloneSource = highLimitValue;
+                }
+                return state.highLimitClone;
+            }
+            return highLimitValue;
         }
 
         const keys = this._keys;
@@ -683,7 +707,7 @@ export class Animation {
                         return quatValue;
                     case Animation.ANIMATIONLOOPMODE_RELATIVE:
                     case Animation.ANIMATIONLOOPMODE_RELATIVE_FROM_CURRENT:
-                        return quatValue.addInPlace((state.offsetValue || _StaticOffsetValueQuaternion).scale(state.repeatCount));
+                        return quatValue.addInPlace((state.offsetValue || _StaticOffsetValueQuaternion).scaleToRef(state.repeatCount, _QuaternionOffset));
                 }
 
                 return quatValue;
@@ -700,7 +724,7 @@ export class Animation {
                         return vec3Value;
                     case Animation.ANIMATIONLOOPMODE_RELATIVE:
                     case Animation.ANIMATIONLOOPMODE_RELATIVE_FROM_CURRENT:
-                        return vec3Value.add((state.offsetValue || _StaticOffsetValueVector3).scale(state.repeatCount));
+                        return vec3Value.addInPlace((state.offsetValue || _StaticOffsetValueVector3).scaleToRef(state.repeatCount, _Vector3Offset));
                 }
                 break;
             }
@@ -716,7 +740,7 @@ export class Animation {
                         return vec2Value;
                     case Animation.ANIMATIONLOOPMODE_RELATIVE:
                     case Animation.ANIMATIONLOOPMODE_RELATIVE_FROM_CURRENT:
-                        return vec2Value.add((state.offsetValue || _StaticOffsetValueVector2).scale(state.repeatCount));
+                        return vec2Value.addInPlace((state.offsetValue || _StaticOffsetValueVector2).scaleToRef(state.repeatCount, _Vector2Offset));
                 }
                 break;
             }
@@ -728,8 +752,13 @@ export class Animation {
                     case Animation.ANIMATIONLOOPMODE_YOYO:
                         return this.sizeInterpolateFunction(startValue, endValue, gradient);
                     case Animation.ANIMATIONLOOPMODE_RELATIVE:
-                    case Animation.ANIMATIONLOOPMODE_RELATIVE_FROM_CURRENT:
-                        return this.sizeInterpolateFunction(startValue, endValue, gradient).add((state.offsetValue || _StaticOffsetValueSize).scale(state.repeatCount));
+                    case Animation.ANIMATIONLOOPMODE_RELATIVE_FROM_CURRENT: {
+                        const sizeValue = this.sizeInterpolateFunction(startValue, endValue, gradient);
+                        const sizeOffset = state.offsetValue || _StaticOffsetValueSize;
+                        sizeValue.width += sizeOffset.width * state.repeatCount;
+                        sizeValue.height += sizeOffset.height * state.repeatCount;
+                        return sizeValue;
+                    }
                 }
                 break;
             }
@@ -745,7 +774,7 @@ export class Animation {
                         return color3Value;
                     case Animation.ANIMATIONLOOPMODE_RELATIVE:
                     case Animation.ANIMATIONLOOPMODE_RELATIVE_FROM_CURRENT:
-                        return color3Value.add((state.offsetValue || _StaticOffsetValueColor3).scale(state.repeatCount));
+                        return color3Value.addInPlace((state.offsetValue || _StaticOffsetValueColor3).scaleToRef(state.repeatCount, _Color3Offset));
                 }
                 break;
             }
@@ -761,7 +790,7 @@ export class Animation {
                         return color4Value;
                     case Animation.ANIMATIONLOOPMODE_RELATIVE:
                     case Animation.ANIMATIONLOOPMODE_RELATIVE_FROM_CURRENT:
-                        return color4Value.add((state.offsetValue || _StaticOffsetValueColor4).scale(state.repeatCount));
+                        return color4Value.addInPlace((state.offsetValue || _StaticOffsetValueColor4).scaleToRef(state.repeatCount, _Color4Offset));
                 }
                 break;
             }

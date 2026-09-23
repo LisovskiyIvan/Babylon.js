@@ -81,6 +81,14 @@ export class RuntimeAnimation {
     private _highLimitsCache: { [key: string]: any } = {};
 
     /**
+     * Memoized cache key for _offsetsCache/_highLimitsCache. The from/to range is
+     * constant across frames, so this avoids rebuilding the key string per animate call.
+     */
+    private _offsetsCacheKey = "";
+    private _offsetsCacheFrom = NaN;
+    private _offsetsCacheTo = NaN;
+
+    /**
      * Specifies if the runtime animation has been stopped
      */
     private _stopped = false;
@@ -349,12 +357,10 @@ export class RuntimeAnimation {
     public reset(restoreOriginal = false): void {
         if (restoreOriginal) {
             if (this._target instanceof Array) {
-                let index = 0;
-                for (const target of this._target) {
+                for (let index = 0; index < this._target.length; index++) {
                     if (this._originalValue[index] !== undefined) {
-                        this._setValue(target, this._activeTargets[index], this._originalValue[index], -1, index);
+                        this._setValue(this._target[index], this._activeTargets[index], this._originalValue[index], -1, index);
                     }
-                    index++;
                 }
             } else {
                 if (this._originalValue[0] !== undefined) {
@@ -365,6 +371,9 @@ export class RuntimeAnimation {
 
         this._offsetsCache = {};
         this._highLimitsCache = {};
+        this._offsetsCacheKey = "";
+        this._offsetsCacheFrom = NaN;
+        this._offsetsCacheTo = NaN;
         this._currentFrame = 0;
         this._blendingFactor = 0;
 
@@ -709,7 +718,12 @@ export class RuntimeAnimation {
                 returnValue = false;
                 highLimitValue = animation.evaluate(from);
             } else if (this._animationState.loopMode !== Animation.ANIMATIONLOOPMODE_CYCLE) {
-                const keyOffset = to.toString() + from.toString();
+                let keyOffset = this._offsetsCacheKey;
+                if (from !== this._offsetsCacheFrom || to !== this._offsetsCacheTo) {
+                    keyOffset = this._offsetsCacheKey = to.toString() + from.toString();
+                    this._offsetsCacheFrom = from;
+                    this._offsetsCacheTo = to;
+                }
                 if (!this._offsetsCache[keyOffset]) {
                     this._animationState.repeatCount = 0;
                     this._animationState.loopMode = Animation.ANIMATIONLOOPMODE_CYCLE; // force a specific codepath in animation._interpolate()!

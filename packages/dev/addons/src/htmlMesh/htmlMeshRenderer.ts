@@ -479,10 +479,12 @@ export class HtmlMeshRenderer {
         // Get the transformation matrix for the html mesh
         const scaledAndTranslatedObjectMatrix = this._getTransformationMatrix(htmlMesh, useRightHandedSystem);
 
-        let style = `translate(-50%, -50%) ${this._getHtmlContentCssMatrix(scaledAndTranslatedObjectMatrix, useRightHandedSystem)}`;
         // In a right handed system, screens are on the wrong side of the mesh, so we have to rotate by Math.PI which results in the matrix3d seen below
         // Also in RH + billboard mode, we cancel the handedness so we do not need to scale on x
-        style += `${useRightHandedSystem ? `matrix3d(${htmlMesh.billboardMode !== TransformNode.BILLBOARDMODE_NONE ? 1 : -1}, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1)` : ""}`;
+        const handednessStyle = useRightHandedSystem
+            ? `matrix3d(${htmlMesh.billboardMode !== TransformNode.BILLBOARDMODE_NONE ? 1 : -1}, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1)`
+            : "";
+        const style = `translate(-50%, -50%) ${this._getHtmlContentCssMatrix(scaledAndTranslatedObjectMatrix, useRightHandedSystem)}${handednessStyle}`;
 
         if (htmlMeshData.style !== style) {
             htmlMesh.element.style.webkitTransform = style;
@@ -524,7 +526,14 @@ export class HtmlMeshRenderer {
         }
 
         // Check if any meshes need to be updated
-        const meshesNeedingUpdate = scene.meshes.filter((mesh) => (mesh as any)["isHtmlMesh"] && (needsUpdate || (mesh as HtmlMesh).requiresUpdate));
+        const sceneMeshes = scene.meshes;
+        const meshesNeedingUpdate: typeof sceneMeshes = [];
+        for (let meshIndex = 0; meshIndex < sceneMeshes.length; meshIndex++) {
+            const mesh = sceneMeshes[meshIndex];
+            if ((mesh as any)["isHtmlMesh"] && (needsUpdate || (mesh as HtmlMesh).requiresUpdate)) {
+                meshesNeedingUpdate.push(mesh);
+            }
+        }
         needsUpdate = needsUpdate || meshesNeedingUpdate.length > 0;
 
         if (!needsUpdate) {
@@ -640,6 +649,21 @@ export class HtmlMeshRenderer {
             this._previousCanvasDocumentPosition.top = canvasDocumentTop;
             this._previousCanvasDocumentPosition.left = canvasDocumentLeft;
 
+            // Body style is identical for every container in this synchronous update, so read it once.
+            const bodyStyle = window.getComputedStyle(document.body);
+            const bodyMarginTop = parseInt(bodyStyle.marginTop, 10);
+            const bodyMarginLeft = parseInt(bodyStyle.marginLeft, 10);
+
+            // Both containers usually share the same offset parent.
+            let hasCachedParent = false;
+            let cachedParent: HTMLElement | null = null;
+            let cachedParentDocumentTop = 0;
+            let cachedParentDocumentLeft = 0;
+            let cachedMarginTop = 0;
+            let cachedMarginLeft = 0;
+            let cachedPaddingTop = 0;
+            let cachedPaddingLeft = 0;
+
             const source = [this._inSceneElements?.container, this._overlayElements?.container];
             for (const container of source) {
                 if (!container) {
@@ -647,21 +671,22 @@ export class HtmlMeshRenderer {
                 }
                 // set the top and left of the css container to match the canvas
                 const containerParent = container.offsetParent as HTMLElement;
-                const parentRect = containerParent.getBoundingClientRect();
-                const parentDocumentTop = parentRect.top + scrollTop;
-                const parentDocumentLeft = parentRect.left + scrollLeft;
+                if (!hasCachedParent || containerParent !== cachedParent) {
+                    hasCachedParent = true;
+                    cachedParent = containerParent;
+                    const parentRect = containerParent.getBoundingClientRect();
+                    cachedParentDocumentTop = parentRect.top + scrollTop;
+                    cachedParentDocumentLeft = parentRect.left + scrollLeft;
 
-                const ancestorMarginsAndPadding = this._getAncestorMarginsAndPadding(containerParent);
+                    const ancestorMarginsAndPadding = this._getAncestorMarginsAndPadding(containerParent);
+                    cachedMarginTop = ancestorMarginsAndPadding.marginTop;
+                    cachedMarginLeft = ancestorMarginsAndPadding.marginLeft;
+                    cachedPaddingTop = ancestorMarginsAndPadding.paddingTop;
+                    cachedPaddingLeft = ancestorMarginsAndPadding.paddingLeft;
+                }
 
-                // Add the body margin
-                const bodyStyle = window.getComputedStyle(document.body);
-                const bodyMarginTop = parseInt(bodyStyle.marginTop, 10);
-                const bodyMarginLeft = parseInt(bodyStyle.marginLeft, 10);
-
-                container.style.top = `${canvasDocumentTop - parentDocumentTop - ancestorMarginsAndPadding.marginTop + ancestorMarginsAndPadding.paddingTop + bodyMarginTop}px`;
-                container.style.left = `${
-                    canvasDocumentLeft - parentDocumentLeft - ancestorMarginsAndPadding.marginLeft + ancestorMarginsAndPadding.paddingLeft + bodyMarginLeft
-                }px`;
+                container.style.top = `${canvasDocumentTop - cachedParentDocumentTop - cachedMarginTop + cachedPaddingTop + bodyMarginTop}px`;
+                container.style.left = `${canvasDocumentLeft - cachedParentDocumentLeft - cachedMarginLeft + cachedPaddingLeft + bodyMarginLeft}px`;
             }
         }
     }
